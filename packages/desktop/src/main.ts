@@ -9,6 +9,7 @@ import { inheritLoginShellEnv } from "./login-shell-env.js";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import {
   app,
@@ -84,7 +85,10 @@ import {
 import { runDesktopStartup } from "./desktop-startup.js";
 import { autoUpdateInstalledSkills } from "./integrations/skills/index.js";
 import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.js";
-import { resolveDesktopBackgroundImageAssetPath } from "./features/background-image.js";
+import {
+  resolveDesktopBackgroundImageAssetPath,
+  resolveDesktopBackgroundImageContentType,
+} from "./features/background-image.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseo";
@@ -537,7 +541,7 @@ ipcMain.handle("paseo:browser:copy-element", (_event, payload: unknown): boolean
 protocol.registerSchemesAsPrivileged([
   {
     scheme: APP_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true },
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
 ]);
 
@@ -841,7 +845,21 @@ async function bootstrap(): Promise<void> {
       if (!backgroundImagePath || !existsSync(backgroundImagePath)) {
         return new Response("Not found", { status: 404 });
       }
-      return net.fetch(pathToFileURL(backgroundImagePath).toString());
+      const contentType = resolveDesktopBackgroundImageContentType(decodedPath);
+      if (!contentType) {
+        return new Response("Not found", { status: 404 });
+      }
+      return readFile(backgroundImagePath).then((body) => {
+        const responseBody = new Uint8Array(body.byteLength);
+        responseBody.set(body);
+        return new Response(responseBody, {
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-store",
+            "Content-Type": contentType,
+          },
+        });
+      });
     }
 
     // Chromium can occasionally request the exported entrypoint directly.

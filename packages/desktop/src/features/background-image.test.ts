@@ -6,6 +6,7 @@ import {
   importDesktopBackgroundImage,
   pruneDesktopBackgroundImages,
   resolveDesktopBackgroundImageAssetPath,
+  resolveDesktopBackgroundImageContentType,
 } from "./background-image";
 
 async function makeTempDir(): Promise<string> {
@@ -79,6 +80,25 @@ describe("desktop background images", () => {
         userDataPath: "/tmp/paseo",
         pathname: "/other.png",
       }),
+    ).toBeNull();
+  });
+
+  it("resolves content types only for managed background image paths", () => {
+    expect(
+      resolveDesktopBackgroundImageContentType(
+        "/background-123e4567-e89b-12d3-a456-426614174000.png",
+      ),
+    ).toBe("image/png");
+    expect(
+      resolveDesktopBackgroundImageContentType(
+        "/background-123e4567-e89b-12d3-a456-426614174000.jpeg",
+      ),
+    ).toBe("image/jpeg");
+    expect(resolveDesktopBackgroundImageContentType("/other.png")).toBeNull();
+    expect(
+      resolveDesktopBackgroundImageContentType(
+        "/../background-123e4567-e89b-12d3-a456-426614174000.png",
+      ),
     ).toBeNull();
   });
 });

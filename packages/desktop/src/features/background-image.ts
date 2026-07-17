@@ -9,6 +9,14 @@ const BACKGROUND_IMAGE_BASENAME = "background";
 const BACKGROUND_IMAGE_PREFIX = `${BACKGROUND_IMAGE_BASENAME}-`;
 const BACKGROUND_IMAGE_FILENAME_PATTERN =
   /^background-[0-9a-f-]{36}\.(?:png|jpe?g|webp|gif|avif)$/i;
+const BACKGROUND_IMAGE_CONTENT_TYPES = new Map([
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
+  [".gif", "image/gif"],
+  [".avif", "image/avif"],
+]);
 
 export interface DesktopBackgroundImageResult {
   uri: string;
@@ -84,6 +92,14 @@ export function resolveDesktopBackgroundImageAssetPath(input: {
     return null;
   }
   return filePath;
+}
+
+export function resolveDesktopBackgroundImageContentType(pathname: string): string | null {
+  const fileName = path.basename(pathname);
+  if (pathname !== `/${fileName}` || !BACKGROUND_IMAGE_FILENAME_PATTERN.test(fileName)) {
+    return null;
+  }
+  return BACKGROUND_IMAGE_CONTENT_TYPES.get(path.extname(fileName).toLowerCase()) ?? null;
 }
 
 function backgroundImageNameFromUri(value: unknown): string | null {

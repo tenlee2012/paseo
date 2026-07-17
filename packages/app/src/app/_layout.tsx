@@ -408,7 +408,17 @@ function QueryProvider({ children }: { children: ReactNode }) {
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
+const transparentSurfaceStyle = { backgroundColor: "transparent" } as const;
 const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
+
+function isDesktopBackgroundImageVisible(settings: {
+  backgroundImage: unknown;
+  backgroundImageOpacity: number;
+}): boolean {
+  return (
+    getIsElectron() && settings.backgroundImage !== null && settings.backgroundImageOpacity > 0
+  );
+}
 
 interface AppContainerProps {
   children: ReactNode;
@@ -500,6 +510,9 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
     hasTopLeftWindowControls,
     sidebarControlsEnabled: chromeEnabled && !isFocusModeEnabled,
   });
+  const appSurfaceStyle = isDesktopBackgroundImageVisible(settings)
+    ? [layoutStyles.surfaceFill, transparentSurfaceStyle]
+    : layoutStyles.surfaceFill;
   const sidebarChrome = (
     <SidebarChrome
       mounted={isCompactLayout ? chromeEnabled : desktopSidebarMounted}
@@ -529,7 +542,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   );
 
   const surface = (
-    <View style={layoutStyles.surfaceFill}>
+    <View style={appSurfaceStyle}>
       {workspaceChrome}
       {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
         <WindowChromeRegion corners="top-left">
@@ -629,15 +642,13 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   // six registered theme keys, so the active key is always current.
   useEffect(() => {
     if (settingsLoading) return;
-    const backgroundImageEnabled =
-      getIsElectron() && settings.backgroundImage !== null && settings.backgroundImageOpacity > 0;
     applyAppearance({
       uiFontFamily: settings.uiFontFamily,
       monoFontFamily: settings.monoFontFamily,
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
       syntaxTheme: settings.syntaxTheme,
-      backgroundImageEnabled,
+      backgroundImageEnabled: isDesktopBackgroundImageVisible(settings),
     });
   }, [
     settingsLoading,
@@ -953,8 +964,7 @@ function RootProviders({ children }: { children: ReactNode }) {
 
 function RootAppTree() {
   const { settings } = useAppSettings();
-  const showBackgroundImage =
-    getIsElectron() && settings.backgroundImage !== null && settings.backgroundImageOpacity > 0;
+  const showBackgroundImage = isDesktopBackgroundImageVisible(settings);
   const backgroundImageSource = useMemo(
     () =>
       showBackgroundImage && settings.backgroundImage
@@ -971,10 +981,16 @@ function RootAppTree() {
     ],
     [settings.backgroundImageOpacity],
   );
+  const rootStyle = showBackgroundImage
+    ? [layoutStyles.root, transparentSurfaceStyle]
+    : layoutStyles.root;
+  const rootSurfaceStyle = showBackgroundImage
+    ? [layoutStyles.surfaceFill, transparentSurfaceStyle]
+    : layoutStyles.surfaceFill;
 
   return (
     <GestureHandlerRootView style={flexStyle}>
-      <View style={layoutStyles.root}>
+      <View style={rootStyle}>
         {backgroundImageSource ? (
           <View
             testID="background-image-layer"
@@ -989,7 +1005,7 @@ function RootAppTree() {
             />
           </View>
         ) : null}
-        <View style={layoutStyles.surfaceFill}>
+        <View style={rootSurfaceStyle}>
           <RootProviders>
             <RuntimeProviders>
               <AppShell />
