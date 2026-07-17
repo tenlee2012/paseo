@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, View, type PressableStateCallbackType } from "react-native";
+import { Alert, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
-import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
+import { ChevronDown, ImagePlus, Monitor, Moon, Sun, Trash2 } from "lucide-react-native";
 import {
   SYNTAX_THEME_OPTIONS,
   type SyntaxThemeId,
   type SyntaxThemeOption,
 } from "@getpaseo/highlight";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,12 @@ import {
   useAppSettings,
   type AppSettings,
 } from "@/hooks/use-settings";
+import { getIsElectron } from "@/constants/platform";
+import {
+  importDesktopBackgroundImageFromFile,
+  pruneImportedDesktopBackgroundImages,
+} from "@/background-image/desktop-background-import";
+import { parseBackgroundImageOpacity } from "@/background-image/background-image";
 import {
   DEFAULT_MONO_FONT_STACK,
   DEFAULT_UI_FONT_STACK,
@@ -49,6 +56,7 @@ const ThemedSun = withUnistyles(Sun);
 const ThemedMoon = withUnistyles(Moon);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedImagePlus = withUnistyles(ImagePlus);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
 
@@ -198,7 +206,7 @@ interface AutoExpandReasoningRowProps {
 function AutoExpandReasoningRow({ value, onChange }: AutoExpandReasoningRowProps) {
   const { t } = useTranslation();
   return (
-    <View style={settingsStyles.row}>
+    <View style={styles.rowWithBorder}>
       <View style={settingsStyles.rowContent}>
         <Text style={settingsStyles.rowTitle}>
           {t("settings.general.autoExpandReasoning.label")}
@@ -453,6 +461,103 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Desktop background image
+// ---------------------------------------------------------------------------
+
+interface BackgroundImageRowProps {
+  image: AppSettings["backgroundImage"];
+  importing: boolean;
+  onImport: () => void;
+  onRemove: () => void;
+}
+
+function getBackgroundImageImportLabel(t: TFunction, imagePresent: boolean, importing: boolean) {
+  if (importing) {
+    return t("settings.appearance.background.importing");
+  }
+  return imagePresent
+    ? t("settings.appearance.background.replace")
+    : t("settings.appearance.background.import");
+}
+
+function BackgroundImageRow({ image, importing, onImport, onRemove }: BackgroundImageRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={settingsStyles.row}>
+      <View style={styles.rowIcon}>
+        <ThemedImagePlus size={ICON_SIZE.md} uniProps={mutedColorMapping} />
+      </View>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>
+          {image ? image.fileName : t("settings.appearance.background.emptyTitle")}
+        </Text>
+        <Text style={settingsStyles.rowHint}>
+          {image
+            ? t("settings.appearance.background.activeHint")
+            : t("settings.appearance.background.emptyHint")}
+        </Text>
+      </View>
+      <View style={styles.backgroundActions}>
+        {image ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={Trash2}
+            onPress={onRemove}
+            accessibilityLabel={t("settings.appearance.background.remove")}
+          >
+            {t("settings.appearance.background.remove")}
+          </Button>
+        ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          leftIcon={ImagePlus}
+          loading={importing}
+          onPress={onImport}
+        >
+          {getBackgroundImageImportLabel(t, image !== null, importing)}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+interface BackgroundOpacityRowProps {
+  draft: string;
+  onChangeDraft: (value: string) => void;
+  onCommit: () => void;
+}
+
+function BackgroundOpacityRow({ draft, onChangeDraft, onCommit }: BackgroundOpacityRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.rowWithBorder}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.background.opacity")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.background.opacityHint")}
+        </Text>
+      </View>
+      <View style={styles.sizeField}>
+        <TextInput
+          value={draft}
+          onChangeText={onChangeDraft}
+          onBlur={onCommit}
+          onSubmitEditing={onCommit}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          selectTextOnFocus
+          style={styles.sizeInput}
+          accessibilityLabel={t("settings.appearance.background.opacityAccessibility")}
+        />
+        <Text style={styles.unit}>%</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -460,6 +565,7 @@ export function AppearanceSection() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useAppSettings();
   const showFontFamilyRows = !isNative;
+  const showBackgroundRows = getIsElectron();
   const uiFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_UI_FONT_STACK);
   const monoFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_MONO_FONT_STACK);
 
@@ -467,6 +573,10 @@ export function AppearanceSection() {
   const [monoFontDraft, setMonoFontDraft] = useState(settings.monoFontFamily);
   const [uiSizeDraft, setUiSizeDraft] = useState(String(settings.uiFontSize));
   const [codeSizeDraft, setCodeSizeDraft] = useState(String(settings.codeFontSize));
+  const [isImportingBackground, setIsImportingBackground] = useState(false);
+  const [backgroundOpacityDraft, setBackgroundOpacityDraft] = useState(
+    String(Math.round(settings.backgroundImageOpacity * 100)),
+  );
 
   // Resync numeric drafts when the committed value changes elsewhere.
   useEffect(() => {
@@ -475,6 +585,9 @@ export function AppearanceSection() {
   useEffect(() => {
     setCodeSizeDraft(String(settings.codeFontSize));
   }, [settings.codeFontSize]);
+  useEffect(() => {
+    setBackgroundOpacityDraft(String(Math.round(settings.backgroundImageOpacity * 100)));
+  }, [settings.backgroundImageOpacity]);
 
   const handleThemeChange = useCallback(
     (theme: AppSettings["theme"]) => {
@@ -489,6 +602,63 @@ export function AppearanceSection() {
     },
     [updateSettings],
   );
+
+  const handleImportBackground = useCallback(async () => {
+    setIsImportingBackground(true);
+    try {
+      const image = await importDesktopBackgroundImageFromFile();
+      if (!image) {
+        return;
+      }
+      await updateSettings({ backgroundImage: image });
+      try {
+        await pruneImportedDesktopBackgroundImages(image.uri);
+      } catch (error) {
+        console.warn("[Appearance] Failed to prune old background images", error);
+      }
+    } catch (error) {
+      console.error("[Appearance] Failed to import background image", error);
+      Alert.alert(
+        t("settings.appearance.background.importFailedTitle"),
+        error instanceof Error ? error.message : t("settings.appearance.background.importFailed"),
+      );
+    } finally {
+      setIsImportingBackground(false);
+    }
+  }, [t, updateSettings]);
+
+  const handleRemoveBackground = useCallback(async () => {
+    try {
+      await updateSettings({ backgroundImage: null });
+    } catch (error) {
+      console.error("[Appearance] Failed to remove background image", error);
+      Alert.alert(
+        t("settings.appearance.background.removeFailedTitle"),
+        t("settings.appearance.background.removeFailed"),
+      );
+      return;
+    }
+    try {
+      await pruneImportedDesktopBackgroundImages();
+    } catch (error) {
+      console.warn("[Appearance] Failed to prune removed background image", error);
+    }
+  }, [t, updateSettings]);
+
+  const handleBackgroundOpacityChange = useCallback((value: string) => {
+    setBackgroundOpacityDraft(value.replace(/[^\d]/g, ""));
+  }, []);
+
+  const commitBackgroundOpacity = useCallback(() => {
+    const parsedPercent = parseBackgroundImageOpacity(
+      backgroundOpacityDraft.length > 0 ? Number(backgroundOpacityDraft) / 100 : Number.NaN,
+    );
+    const next = parsedPercent ?? settings.backgroundImageOpacity;
+    setBackgroundOpacityDraft(String(Math.round(next * 100)));
+    if (next !== settings.backgroundImageOpacity) {
+      void updateSettings({ backgroundImageOpacity: next });
+    }
+  }, [backgroundOpacityDraft, settings.backgroundImageOpacity, updateSettings]);
 
   const handleAutoExpandReasoningChange = useCallback(
     (autoExpandReasoning: boolean) => {
@@ -584,6 +754,25 @@ export function AppearanceSection() {
           <ThemeRow value={settings.theme} onChange={handleThemeChange} />
         </View>
       </SettingsSection>
+      {showBackgroundRows ? (
+        <SettingsSection title={t("settings.appearance.background.title")}>
+          <View style={settingsStyles.card}>
+            <BackgroundImageRow
+              image={settings.backgroundImage}
+              importing={isImportingBackground}
+              onImport={handleImportBackground}
+              onRemove={handleRemoveBackground}
+            />
+            {settings.backgroundImage ? (
+              <BackgroundOpacityRow
+                draft={backgroundOpacityDraft}
+                onChangeDraft={handleBackgroundOpacityChange}
+                onCommit={commitBackgroundOpacity}
+              />
+            ) : null}
+          </View>
+        </SettingsSection>
+      ) : null}
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <View style={settingsStyles.card}>
           <AutoExpandReasoningRow
@@ -689,6 +878,14 @@ const styles = StyleSheet.create((theme) => ({
     borderRadius: ICON_SIZE.md / 2,
     borderWidth: theme.borderWidth[1],
     borderColor: theme.colors.border,
+  },
+  backgroundActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  rowIcon: {
+    marginRight: theme.spacing[3],
   },
   fontFamilyInput: {
     flexGrow: 1,

@@ -39,7 +39,12 @@ interface FakeTheme {
     "4xl": number;
   };
   lineHeight: { diff: number };
-  colors: { foreground: string; syntax: Record<string, string> };
+  colors: {
+    foreground: string;
+    syntax: Record<string, string>;
+    surface0: string;
+    surfaceWorkspace: string;
+  };
 }
 
 function makeFakeTheme(): FakeTheme {
@@ -58,7 +63,12 @@ function makeFakeTheme(): FakeTheme {
       "4xl": 34,
     },
     lineHeight: { diff: 22 },
-    colors: { foreground: "#fff", syntax: {} },
+    colors: {
+      foreground: "#fff",
+      syntax: {},
+      surface0: "#seed",
+      surfaceWorkspace: "#seed",
+    },
   };
 }
 
@@ -69,6 +79,7 @@ function makeInput(overrides: Partial<AppearanceInput> = {}): AppearanceInput {
     uiFontSize: 16,
     codeFontSize: 12,
     syntaxTheme: "one",
+    backgroundImageEnabled: false,
     ...overrides,
   };
 }
@@ -169,8 +180,28 @@ describe("applyAppearance", () => {
   it("resolves a syntax theme using the theme's own color scheme", () => {
     applyAppearance(makeInput({ syntaxTheme: "github" }));
 
-    // makeFakeTheme().colorScheme === "dark" -> github resolves to the dark palette.
-    expect(runCapturedUpdater().colors.syntax).toEqual(darkHighlightColors);
-    expect(runCapturedUpdater().colors.syntax).toEqual(resolveSyntaxColors("github", "dark"));
+    expect(runCapturedUpdater(1).colors.syntax).toEqual(darkHighlightColors);
+    expect(runCapturedUpdater(1).colors.syntax).toEqual(resolveSyntaxColors("github", "dark"));
+  });
+
+  it("makes the main canvas transparent while a background image is enabled", () => {
+    applyAppearance(makeInput({ backgroundImageEnabled: true }));
+
+    const { colors } = runCapturedUpdater();
+    expect(colors.surface0).toBe("transparent");
+    expect(colors.surfaceWorkspace).toBe("transparent");
+  });
+
+  it("restores canonical canvas colors after a background image is disabled", () => {
+    applyAppearance(makeInput({ backgroundImageEnabled: false }));
+
+    const updater = updateTheme.mock.calls[0]?.[1] as unknown as ThemeUpdater;
+    const previouslyTransparent = makeFakeTheme();
+    previouslyTransparent.colors.surface0 = "transparent";
+    previouslyTransparent.colors.surfaceWorkspace = "transparent";
+
+    const { colors } = updater(previouslyTransparent);
+    expect(colors.surface0).toBe("#ffffff");
+    expect(colors.surfaceWorkspace).toBe("#ffffff");
   });
 });

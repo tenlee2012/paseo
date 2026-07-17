@@ -26,6 +26,10 @@ import {
   updateSkills,
 } from "../integrations/skills/index.js";
 import {
+  importDesktopBackgroundImage,
+  pruneDesktopBackgroundImages,
+} from "../features/background-image.js";
+import {
   openLocalTransportSession,
   sendLocalTransportMessage,
   closeLocalTransportSession,
@@ -619,6 +623,16 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     install_skills: () => installSkills(),
     update_skills: () => updateSkills(),
     uninstall_skills: () => uninstallSkills(),
+    import_desktop_background_image: (args) =>
+      importDesktopBackgroundImage({
+        path: args?.path,
+        userDataPath: app.getPath("userData"),
+      }),
+    prune_desktop_background_images: (args) =>
+      pruneDesktopBackgroundImages({
+        userDataPath: app.getPath("userData"),
+        keepUri: args?.keepUri,
+      }),
   };
 }
 

@@ -2,6 +2,8 @@
 
 Tokens — every color, font size, weight, spacing step, radius, icon size — live in `packages/app/src/styles/theme.ts`.
 
+Desktop background images are imported from Settings > Appearance. Electron validates PNG, JPEG, WebP, GIF, and AVIF signatures, caps files at 25 MB, copies the active image into its user-data `background-images/` directory, and exposes only that directory through `paseo://background-images/`. App settings persist the managed resource URI, original filename, and an opacity value clamped to `0..1`; image bytes never enter AsyncStorage. Opacity `0` disables the background canvas and restores the canonical theme surfaces.
+
 ---
 
 ## 1. Character

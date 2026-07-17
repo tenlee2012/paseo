@@ -84,6 +84,7 @@ import {
 import { runDesktopStartup } from "./desktop-startup.js";
 import { autoUpdateInstalledSkills } from "./integrations/skills/index.js";
 import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.js";
+import { resolveDesktopBackgroundImageAssetPath } from "./features/background-image.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseo";
@@ -829,8 +830,19 @@ async function bootstrap(): Promise<void> {
 
   const appDistDir = getAppDistDir();
   protocol.handle(APP_SCHEME, (request) => {
-    const { pathname, search, hash } = new URL(request.url);
+    const { hostname, pathname, search, hash } = new URL(request.url);
     const decodedPath = decodeURIComponent(pathname);
+
+    if (hostname === "background-images") {
+      const backgroundImagePath = resolveDesktopBackgroundImageAssetPath({
+        userDataPath: app.getPath("userData"),
+        pathname: decodedPath,
+      });
+      if (!backgroundImagePath || !existsSync(backgroundImagePath)) {
+        return new Response("Not found", { status: 404 });
+      }
+      return net.fetch(pathToFileURL(backgroundImagePath).toString());
+    }
 
     // Chromium can occasionally request the exported entrypoint directly.
     // Canonicalize it back to the route URL so Expo Router sees `/`, not `/index.html`.

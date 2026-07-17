@@ -1,9 +1,16 @@
 import { UnistylesRuntime } from "react-native-unistyles";
 import { resolveSyntaxColors, type SyntaxThemeId } from "@getpaseo/highlight";
+import { applyBackgroundImageCanvas } from "@/background-image/background-image";
 import {
   DEFAULT_UI_FONT_STACK,
   DEFAULT_MONO_FONT_STACK,
   FONT_SIZE,
+  darkClaudeTheme,
+  darkGhosttyTheme,
+  darkMidnightTheme,
+  darkTheme,
+  darkZincTheme,
+  lightTheme,
   type Theme,
 } from "@/styles/theme";
 import { applyRootUiFont } from "./apply-root-font";
@@ -20,6 +27,15 @@ const ALL_THEME_KEYS = [
   "darkGhostty",
 ] as const;
 
+const BASE_THEME_BY_KEY = {
+  light: lightTheme,
+  dark: darkTheme,
+  darkZinc: darkZincTheme,
+  darkMidnight: darkMidnightTheme,
+  darkClaude: darkClaudeTheme,
+  darkGhostty: darkGhosttyTheme,
+} as const;
+
 // The UI font size at which the FONT_SIZE ramp is authored (1.0 scale factor).
 const BASE_UI_REFERENCE = FONT_SIZE.base; // 16
 
@@ -29,6 +45,7 @@ export interface AppearanceInput {
   uiFontSize: number; // already clamped
   codeFontSize: number; // already clamped
   syntaxTheme: SyntaxThemeId;
+  backgroundImageEnabled: boolean;
 }
 
 /**
@@ -76,26 +93,35 @@ export function applyAppearance(input: AppearanceInput): void {
     // return the theme union, and a spread of the union widens `colorScheme` to
     // `"light" | "dark"`, assignable to neither concrete member. Each branch spreads
     // a single narrowed theme type.
-    UnistylesRuntime.updateTheme(key, (t) => {
+    UnistylesRuntime.updateTheme(key, () => {
+      const baseTheme = BASE_THEME_BY_KEY[key];
       const fontFamily = { ui, mono };
       const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
-      const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
-      if (t.colorScheme === "light") {
-        return {
-          ...t,
+      const lineHeight = { ...baseTheme.lineHeight, diff: diffLineHeight };
+      if (baseTheme.colorScheme === "light") {
+        const next = {
+          ...baseTheme,
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+          colors: {
+            ...baseTheme.colors,
+            syntax: resolveSyntaxColors(input.syntaxTheme, baseTheme.colorScheme),
+          },
         };
+        return applyBackgroundImageCanvas(next, input.backgroundImageEnabled);
       }
-      return {
-        ...t,
+      const next = {
+        ...baseTheme,
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+        colors: {
+          ...baseTheme.colors,
+          syntax: resolveSyntaxColors(input.syntaxTheme, baseTheme.colorScheme),
+        },
       };
+      return applyBackgroundImageCanvas(next, input.backgroundImageEnabled);
     });
   }
 

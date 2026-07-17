@@ -2,6 +2,12 @@ import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
+import {
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
+  normalizeBackgroundImage,
+  parseBackgroundImageOpacity,
+  type BackgroundImage,
+} from "@/background-image/background-image";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 
 export const APP_SETTINGS_KEY = "@paseo:app-settings";
@@ -40,6 +46,8 @@ export interface AppSettings {
   uiFontSize: number; // clamped px, default 16
   codeFontSize: number; // clamped px, default 12
   syntaxTheme: SyntaxThemeId; // default "one"
+  backgroundImage: BackgroundImage | null;
+  backgroundImageOpacity: number;
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
@@ -50,7 +58,12 @@ export interface Settings extends AppSettings {
   releaseChannel: ReleaseChannel;
 }
 
-type StoredAppSettings = Partial<AppSettings> & { compactToolCalls?: unknown };
+type StoredAppSettings = Partial<AppSettings> & {
+  compactToolCalls?: unknown;
+  // COMPAT(backgroundImageOpacity): old draft used this key before the feature shipped.
+  // Remove after 2027-01-17.
+  skinBackgroundOpacity?: unknown;
+};
 
 export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   theme: "auto",
@@ -63,6 +76,8 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   uiFontSize: DEFAULT_UI_FONT_SIZE,
   codeFontSize: DEFAULT_CODE_FONT_SIZE,
   syntaxTheme: "one",
+  backgroundImage: null,
+  backgroundImageOpacity: DEFAULT_BACKGROUND_IMAGE_OPACITY,
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
@@ -186,8 +201,32 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
-function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+function parseBackgroundImageSetting(
+  stored: StoredAppSettings,
+): BackgroundImage | null | undefined {
+  if (stored.backgroundImage === null) {
+    return null;
+  }
+  return normalizeBackgroundImage(stored.backgroundImage) ?? undefined;
+}
+
+function pickBackgroundAppearanceSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
+  const backgroundImage = parseBackgroundImageSetting(stored);
+  if (backgroundImage !== undefined) {
+    result.backgroundImage = backgroundImage;
+  }
+  const backgroundImageOpacity = parseBackgroundImageOpacity(
+    stored.backgroundImageOpacity ?? stored.skinBackgroundOpacity,
+  );
+  if (backgroundImageOpacity !== null) {
+    result.backgroundImageOpacity = backgroundImageOpacity;
+  }
+  return result;
+}
+
+function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = pickBackgroundAppearanceSettings(stored);
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
     result.theme = stored.theme;
   }

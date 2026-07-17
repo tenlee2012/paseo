@@ -328,6 +328,8 @@ describe("appearance settings", () => {
     expect(result.uiFontSize).toBe(DEFAULT_UI_FONT_SIZE);
     expect(result.codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
     expect(result.syntaxTheme).toBe("one");
+    expect(result.backgroundImage).toBeNull();
+    expect(result.backgroundImageOpacity).toBe(0.2);
     expect(result.toolCallDetailLevel).toBe("detailed");
   });
 
@@ -465,6 +467,42 @@ describe("appearance settings", () => {
     });
 
     expect((await loadAppSettingsFromStorage(deps)).syntaxTheme).toBe("one");
+  });
+
+  it("loads a managed background image and clamps opacity", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          backgroundImage: {
+            uri: "paseo://background-images/background-123e4567-e89b-12d3-a456-426614174000.webp",
+            fileName: "dream.webp",
+          },
+          backgroundImageOpacity: 4,
+        }),
+      }),
+    });
+
+    const settings = await loadAppSettingsFromStorage(deps);
+    expect(settings.backgroundImage).toEqual({
+      uri: "paseo://background-images/background-123e4567-e89b-12d3-a456-426614174000.webp",
+      fileName: "dream.webp",
+    });
+    expect(settings.backgroundImageOpacity).toBe(1);
+  });
+
+  it("drops external background image URLs", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          backgroundImage: {
+            uri: "https://example.com/dream.webp",
+            fileName: "dream.webp",
+          },
+        }),
+      }),
+    });
+
+    expect((await loadAppSettingsFromStorage(deps)).backgroundImage).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import { PortalProvider } from "@gorhom/portal";
 import { QueryClientProvider } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
+import { Image as ExpoImage } from "expo-image";
 import { Stack, useNavigationContainerRef, usePathname, useRouter } from "expo-router";
 import {
   createContext,
@@ -48,7 +49,7 @@ import {
   resolveDesktopAppChromeLayout,
   resolveDesktopAppContentMinimum,
 } from "@/components/desktop-sidebar-layout";
-import { isNative, isWeb } from "@/constants/platform";
+import { getIsElectron, isNative, isWeb } from "@/constants/platform";
 import { HorizontalScrollProvider } from "@/contexts/horizontal-scroll-context";
 import { SessionProvider } from "@/contexts/session-context";
 import { SidebarCalloutProvider } from "@/contexts/sidebar-callout-context";
@@ -628,12 +629,15 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
   // six registered theme keys, so the active key is always current.
   useEffect(() => {
     if (settingsLoading) return;
+    const backgroundImageEnabled =
+      getIsElectron() && settings.backgroundImage !== null && settings.backgroundImageOpacity > 0;
     applyAppearance({
       uiFontFamily: settings.uiFontFamily,
       monoFontFamily: settings.monoFontFamily,
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
       syntaxTheme: settings.syntaxTheme,
+      backgroundImageEnabled,
     });
   }, [
     settingsLoading,
@@ -642,6 +646,8 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
     settings.uiFontSize,
     settings.codeFontSize,
     settings.syntaxTheme,
+    settings.backgroundImage,
+    settings.backgroundImageOpacity,
   ]);
 
   return (
@@ -657,18 +663,19 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
 
 function DesktopWindowControlsSync({ enabled }: { enabled: boolean }) {
   const { theme } = useUnistyles();
-  const surface0 = theme.colors.surface0;
-  const foreground = theme.colors.foreground;
+  const backgroundColor =
+    theme.colors.surface0 === "transparent" ? theme.colors.surface1 : theme.colors.surface0;
+  const foregroundColor = theme.colors.foreground;
 
   useEffect(() => {
     if (!enabled || isNative) return;
     void updateDesktopWindowControls({
-      backgroundColor: surface0,
-      foregroundColor: foreground,
+      backgroundColor,
+      foregroundColor,
     }).catch((error) => {
       console.warn("[DesktopWindow] Failed to update window controls overlay", error);
     });
-  }, [enabled, surface0, foreground]);
+  }, [enabled, backgroundColor, foregroundColor]);
 
   return null;
 }
@@ -945,14 +952,50 @@ function RootProviders({ children }: { children: ReactNode }) {
 }
 
 function RootAppTree() {
+  const { settings } = useAppSettings();
+  const showBackgroundImage =
+    getIsElectron() && settings.backgroundImage !== null && settings.backgroundImageOpacity > 0;
+  const backgroundImageSource = useMemo(
+    () =>
+      showBackgroundImage && settings.backgroundImage
+        ? { uri: settings.backgroundImage.uri }
+        : null,
+    [settings.backgroundImage, showBackgroundImage],
+  );
+  const backgroundImageLayerStyle = useMemo(
+    () => [
+      layoutStyles.backgroundImageLayer,
+      {
+        opacity: settings.backgroundImageOpacity,
+      },
+    ],
+    [settings.backgroundImageOpacity],
+  );
+
   return (
     <GestureHandlerRootView style={flexStyle}>
-      <View style={layoutStyles.surfaceFill}>
-        <RootProviders>
-          <RuntimeProviders>
-            <AppShell />
-          </RuntimeProviders>
-        </RootProviders>
+      <View style={layoutStyles.root}>
+        {backgroundImageSource ? (
+          <View
+            testID="background-image-layer"
+            pointerEvents="none"
+            style={backgroundImageLayerStyle}
+          >
+            <ExpoImage
+              source={backgroundImageSource}
+              contentFit="cover"
+              transition={120}
+              style={layoutStyles.backgroundImage}
+            />
+          </View>
+        ) : null}
+        <View style={layoutStyles.surfaceFill}>
+          <RootProviders>
+            <RuntimeProviders>
+              <AppShell />
+            </RuntimeProviders>
+          </RootProviders>
+        </View>
       </View>
     </GestureHandlerRootView>
   );
@@ -981,9 +1024,21 @@ export default function RootLayout() {
 }
 
 const layoutStyles = StyleSheet.create((theme) => ({
+  root: {
+    flex: 1,
+    backgroundColor: theme.colors.surface0,
+    position: "relative",
+  },
   surfaceFill: {
     flex: 1,
     backgroundColor: theme.colors.surface0,
+  },
+  backgroundImageLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backgroundImage: {
+    width: "100%",
+    height: "100%",
   },
   windowSidebarToggle: {
     position: "absolute",
