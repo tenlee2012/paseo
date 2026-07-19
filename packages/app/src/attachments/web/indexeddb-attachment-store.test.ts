@@ -20,26 +20,52 @@ class FakeRequest {
 }
 
 class FakeObjectStore {
-  constructor(private readonly onPut: (record: unknown) => void) {}
+  constructor(
+    private readonly onPut: (record: unknown) => void,
+    private readonly finishTransaction: () => void,
+  ) {}
 
   put(record: unknown): FakeRequest {
     this.onPut(record);
     const request = new FakeRequest();
-    queueMicrotask(() => request.emit("success"));
+    queueMicrotask(() => {
+      request.emit("success");
+      this.finishTransaction();
+    });
     return request;
   }
 }
 
 class FakeTransaction {
   error: Error | null = null;
+  private listeners = new Map<string, Listener[]>();
+  private readonly store: FakeObjectStore;
 
-  constructor(private readonly store: FakeObjectStore) {}
+  constructor(
+    onPut: (record: unknown) => void,
+    private readonly outcome: "complete" | "abort",
+  ) {
+    this.store = new FakeObjectStore(onPut, () => {
+      if (this.outcome === "abort") {
+        this.error = new Error("quota exceeded");
+      }
+      this.emit(this.outcome);
+    });
+  }
 
   objectStore(): FakeObjectStore {
     return this.store;
   }
 
-  addEventListener(): void {}
+  addEventListener(event: string, listener: Listener): void {
+    this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener]);
+  }
+
+  emit(event: string): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener();
+    }
+  }
 }
 
 class FakeDatabase {
@@ -47,12 +73,15 @@ class FakeDatabase {
     contains: () => true,
   };
 
-  constructor(private readonly store: FakeObjectStore) {}
+  constructor(
+    private readonly onPut: (record: unknown) => void,
+    private readonly outcome: "complete" | "abort",
+  ) {}
 
   createObjectStore(): void {}
 
   transaction(): FakeTransaction {
-    return new FakeTransaction(this.store);
+    return new FakeTransaction(this.onPut, this.outcome);
   }
 
   close(): void {}
@@ -60,18 +89,22 @@ class FakeDatabase {
 
 describe("indexeddb attachment store", () => {
   let storedRecord: unknown;
+  let openedDatabaseNames: string[];
+  let transactionOutcome: "complete" | "abort";
 
   beforeEach(() => {
     storedRecord = null;
+    openedDatabaseNames = [];
+    transactionOutcome = "complete";
     Object.defineProperty(globalThis, "indexedDB", {
       configurable: true,
       value: {
-        open: () => {
-          const store = new FakeObjectStore((record) => {
-            storedRecord = record;
-          });
+        open: (name: string) => {
+          openedDatabaseNames.push(name);
           const request = new FakeRequest();
-          request.result = new FakeDatabase(store);
+          request.result = new FakeDatabase((record) => {
+            storedRecord = record;
+          }, transactionOutcome);
           queueMicrotask(() => request.emit("success"));
           return request;
         },
@@ -108,5 +141,33 @@ describe("indexeddb attachment store", () => {
       fileName: "image.png",
       byteSize: 4,
     });
+  });
+
+  it("uses a caller-provided database name for independent binary storage", async () => {
+    const store = createIndexedDbAttachmentStore({
+      databaseName: "paseo-background-images",
+      storeName: "images",
+    });
+
+    await store.save({
+      id: "background_1",
+      mimeType: "image/png",
+      source: { kind: "bytes", bytes: new Uint8Array([0]) },
+    });
+
+    expect(openedDatabaseNames).toEqual(["paseo-background-images"]);
+  });
+
+  it("rejects when the transaction aborts after the put request succeeds", async () => {
+    transactionOutcome = "abort";
+    const store = createIndexedDbAttachmentStore();
+
+    await expect(
+      store.save({
+        id: "att_aborted",
+        mimeType: "image/png",
+        source: { kind: "bytes", bytes: new Uint8Array([0]) },
+      }),
+    ).rejects.toThrow("quota exceeded");
   });
 });

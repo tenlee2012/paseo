@@ -4,11 +4,15 @@ import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
   DEFAULT_APP_SETTINGS,
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_UI_FONT_SIZE,
   loadAppSettingsFromStorage,
   loadSettingsFromStorage,
+  MAX_BACKGROUND_IMAGE_OPACITY,
+  MIN_BACKGROUND_IMAGE_OPACITY,
+  parseBackgroundImageOpacity,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
   saveAppSettings,
@@ -304,12 +308,45 @@ describe("saveAppSettings", () => {
       toolCallDetailLevel: "overview",
     });
   });
+
+  it("keeps the query cache unchanged when persistence fails", async () => {
+    const queryClient = new QueryClient();
+    const current = { ...DEFAULT_CLIENT_SETTINGS, theme: "dark" as const };
+    queryClient.setQueryData(APP_SETTINGS_QUERY_KEY, current);
+    const deps = makeDeps({
+      storage: {
+        ...createInMemoryKeyValueStorage(),
+        async setItem() {
+          throw new Error("storage unavailable");
+        },
+      },
+    });
+
+    await expect(
+      saveAppSettings({
+        queryClient,
+        updates: { backgroundImageOpacity: 35 },
+        deps,
+      }),
+    ).rejects.toThrow("storage unavailable");
+
+    expect(queryClient.getQueryData(APP_SETTINGS_QUERY_KEY)).toEqual(current);
+  });
 });
 
 describe("parseTerminalScrollbackLines", () => {
   it("clamps negative values to the minimum and rejects non-numeric strings", () => {
     expect(parseTerminalScrollbackLines("-10")).toBe(0);
     expect(parseTerminalScrollbackLines("abc")).toBeNull();
+  });
+});
+
+describe("parseBackgroundImageOpacity", () => {
+  it("clamps values to the allowed percentage range", () => {
+    expect(parseBackgroundImageOpacity(-1)).toBe(MIN_BACKGROUND_IMAGE_OPACITY);
+    expect(parseBackgroundImageOpacity(101)).toBe(MAX_BACKGROUND_IMAGE_OPACITY);
+    expect(parseBackgroundImageOpacity("45.9")).toBe(45);
+    expect(parseBackgroundImageOpacity("invalid")).toBeNull();
   });
 });
 
@@ -329,6 +366,46 @@ describe("appearance settings", () => {
     expect(result.codeFontSize).toBe(DEFAULT_CODE_FONT_SIZE);
     expect(result.syntaxTheme).toBe("one");
     expect(result.toolCallDetailLevel).toBe("detailed");
+    expect(result.backgroundImage).toBeNull();
+    expect(result.backgroundImageOpacity).toBe(DEFAULT_BACKGROUND_IMAGE_OPACITY);
+  });
+
+  it("loads valid background image metadata and clamps opacity", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          backgroundImage: {
+            id: "background_1",
+            mimeType: "image/png",
+            storageType: "web-indexeddb",
+            storageKey: "background_1",
+            createdAt: 1,
+          },
+          backgroundImageOpacity: 999,
+        }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.backgroundImage).toMatchObject({ id: "background_1" });
+    expect(result.backgroundImageOpacity).toBe(MAX_BACKGROUND_IMAGE_OPACITY);
+  });
+
+  it("drops malformed background image metadata and resets invalid opacity", async () => {
+    const deps = makeDeps({
+      storage: createInMemoryKeyValueStorage({
+        [APP_SETTINGS_KEY]: JSON.stringify({
+          backgroundImage: { id: "background_1" },
+          backgroundImageOpacity: "invalid",
+        }),
+      }),
+    });
+
+    const result = await loadAppSettingsFromStorage(deps);
+
+    expect(result.backgroundImage).toBeNull();
+    expect(result.backgroundImageOpacity).toBe(DEFAULT_BACKGROUND_IMAGE_OPACITY);
   });
 
   it("migrates the enabled compact tool call preference to overview", async () => {

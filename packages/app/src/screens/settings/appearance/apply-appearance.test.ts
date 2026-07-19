@@ -39,7 +39,18 @@ interface FakeTheme {
     "4xl": number;
   };
   lineHeight: { diff: number };
-  colors: { foreground: string; syntax: Record<string, string> };
+  colors: {
+    foreground: string;
+    surface0: string;
+    surface1: string;
+    surfaceSidebar: string;
+    surfaceWorkspace: string;
+    surface0Opaque: string;
+    surface1Opaque: string;
+    surfaceSidebarOpaque: string;
+    surfaceWorkspaceOpaque: string;
+    syntax: Record<string, string>;
+  };
 }
 
 function makeFakeTheme(): FakeTheme {
@@ -58,7 +69,18 @@ function makeFakeTheme(): FakeTheme {
       "4xl": 34,
     },
     lineHeight: { diff: 22 },
-    colors: { foreground: "#fff", syntax: {} },
+    colors: {
+      foreground: "#fff",
+      surface0: "#181B1A",
+      surface1: "#1E2120",
+      surfaceSidebar: "#141716",
+      surfaceWorkspace: "#1E2120",
+      surface0Opaque: "#181B1A",
+      surface1Opaque: "#1E2120",
+      surfaceSidebarOpaque: "#141716",
+      surfaceWorkspaceOpaque: "#1E2120",
+      syntax: {},
+    },
   };
 }
 
@@ -172,5 +194,27 @@ describe("applyAppearance", () => {
     // makeFakeTheme().colorScheme === "dark" -> github resolves to the dark palette.
     expect(runCapturedUpdater().colors.syntax).toEqual(darkHighlightColors);
     expect(runCapturedUpdater().colors.syntax).toEqual(resolveSyntaxColors("github", "dark"));
+  });
+
+  it("makes global app surfaces translucent when a background image is enabled", () => {
+    applyAppearance(makeInput({ backgroundImageEnabled: true }));
+
+    const { colors } = runCapturedUpdater();
+
+    expect(colors.surface0).toBe("rgba(24, 27, 26, 0.45)");
+    expect(colors.surface1).toBe("rgba(30, 33, 32, 0.62)");
+    expect(colors.surfaceWorkspace).toBe("rgba(30, 33, 32, 0.45)");
+    expect(colors.surfaceSidebar).toBe("rgba(20, 23, 22, 0.72)");
+  });
+
+  it("restores opaque global app surfaces without a background image", () => {
+    applyAppearance(makeInput({ backgroundImageEnabled: false }));
+
+    const { colors } = runCapturedUpdater();
+
+    expect(colors.surface0).toBe("#181B1A");
+    expect(colors.surface1).toBe("#1E2120");
+    expect(colors.surfaceWorkspace).toBe("#1E2120");
+    expect(colors.surfaceSidebar).toBe("#141716");
   });
 });

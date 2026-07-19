@@ -3,6 +3,8 @@ import { Alert } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
 import { getDesktopHost, isElectronRuntime } from "@/desktop/host";
+import { getRasterImageMimeTypeFromPath } from "@/attachments/file-types";
+import { BACKGROUND_IMAGE_FILE_EXTENSIONS } from "@/background-image/formats";
 import {
   normalizePickedImageAssets,
   openImagePathsWithDesktopDialog,
@@ -12,6 +14,7 @@ import { isWeb } from "@/constants/platform";
 
 interface UseImageAttachmentPickerResult {
   pickImages: () => Promise<PickedImageAttachmentInput[] | null>;
+  pickImage: () => Promise<PickedImageAttachmentInput | null>;
 }
 
 export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
@@ -92,5 +95,59 @@ export function useImageAttachmentPicker(): UseImageAttachmentPickerResult {
     }
   }, [ensurePermission, t]);
 
-  return { pickImages };
+  const pickImage = useCallback(async () => {
+    if (isPickingRef.current) {
+      return null;
+    }
+
+    isPickingRef.current = true;
+
+    try {
+      if (isWeb && isElectronRuntime()) {
+        const [selectedPath] = await openImagePathsWithDesktopDialog(getDesktopHost()?.dialog, {
+          multiple: false,
+          title: t("settings.appearance.background.imagePickerTitle"),
+          filterName: t("settings.appearance.background.imagePickerFilter"),
+          extensions: BACKGROUND_IMAGE_FILE_EXTENSIONS,
+        });
+        return selectedPath
+          ? {
+              source: { kind: "file_uri" as const, uri: selectedPath },
+              mimeType: getRasterImageMimeTypeFromPath(selectedPath),
+              fileName: null,
+            }
+          : null;
+      }
+
+      const hasPermission = await ensurePermission();
+      if (!hasPermission) {
+        return null;
+      }
+
+      const pendingResult = await ImagePicker.getPendingResultAsync();
+      if (pendingResult && "canceled" in pendingResult && !pendingResult.canceled) {
+        return (await normalizePickedImageAssets(pendingResult.assets))[0] ?? null;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"] as ImagePicker.MediaType[],
+        allowsMultipleSelection: false,
+        quality: 0.8,
+      });
+
+      if (result.canceled) {
+        return null;
+      }
+
+      return (await normalizePickedImageAssets(result.assets))[0] ?? null;
+    } catch (error) {
+      console.error("[ImageAttachmentPicker] Failed to pick image:", error);
+      Alert.alert(t("imageAttachmentPicker.errorTitle"), t("imageAttachmentPicker.failedToSelect"));
+      return null;
+    } finally {
+      isPickingRef.current = false;
+    }
+  }, [ensurePermission, t]);
+
+  return { pickImages, pickImage };
 }

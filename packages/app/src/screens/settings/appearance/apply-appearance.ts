@@ -29,6 +29,7 @@ export interface AppearanceInput {
   uiFontSize: number; // already clamped
   codeFontSize: number; // already clamped
   syntaxTheme: SyntaxThemeId;
+  backgroundImageEnabled?: boolean;
 }
 
 /**
@@ -81,20 +82,60 @@ export function applyAppearance(input: AppearanceInput): void {
       const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
       const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
       if (t.colorScheme === "light") {
+        const colors = {
+          ...t.colors,
+          surface0:
+            input.backgroundImageEnabled === true
+              ? withAlpha(t.colors.surface0Opaque, 0.45)
+              : t.colors.surface0Opaque,
+          surface1:
+            input.backgroundImageEnabled === true
+              ? withAlpha(t.colors.surface1Opaque, 0.62)
+              : t.colors.surface1Opaque,
+          surfaceWorkspace:
+            input.backgroundImageEnabled === true
+              ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
+              : t.colors.surfaceWorkspaceOpaque,
+          surfaceSidebar:
+            input.backgroundImageEnabled === true
+              ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
+              : t.colors.surfaceSidebarOpaque,
+          syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
+        };
         return {
           ...t,
           fontFamily,
           fontSize,
           lineHeight,
-          colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+          colors,
         };
       }
+      const colors = {
+        ...t.colors,
+        surface0:
+          input.backgroundImageEnabled === true
+            ? withAlpha(t.colors.surface0Opaque, 0.45)
+            : t.colors.surface0Opaque,
+        surface1:
+          input.backgroundImageEnabled === true
+            ? withAlpha(t.colors.surface1Opaque, 0.62)
+            : t.colors.surface1Opaque,
+        surfaceWorkspace:
+          input.backgroundImageEnabled === true
+            ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
+            : t.colors.surfaceWorkspaceOpaque,
+        surfaceSidebar:
+          input.backgroundImageEnabled === true
+            ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
+            : t.colors.surfaceSidebarOpaque,
+        syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
+      };
       return {
         ...t,
         fontFamily,
         fontSize,
         lineHeight,
-        colors: { ...t.colors, syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme) },
+        colors,
       };
     });
   }
@@ -102,4 +143,12 @@ export function applyAppearance(input: AppearanceInput): void {
   // Web: apply the UI font app-wide (RN-web stamps a default font on every text
   // element, so it can't be done through the theme alone). No-op on native.
   applyRootUiFont(ui);
+}
+
+function withAlpha(color: string, opacity: number): string {
+  const normalized = color.replace("#", "");
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }

@@ -1,6 +1,7 @@
 import { isSyntaxThemeId, type SyntaxThemeId } from "@getpaseo/highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DesktopSettings } from "@/desktop/settings/desktop-settings";
+import { isBackgroundImageMetadata, type BackgroundImageMetadata } from "@/background-image/types";
 import { parseAppLanguage, type AppLanguage } from "@/i18n/locales";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
 
@@ -28,6 +29,9 @@ export const DEFAULT_CODE_FONT_SIZE = 12; // == FONT_SIZE.code
 export const MIN_CODE_FONT_SIZE = 9;
 export const MAX_CODE_FONT_SIZE = 22; // line-height 1.5×22=33 stays safe
 export const MAX_FONT_FAMILY_LENGTH = 200;
+export const DEFAULT_BACKGROUND_IMAGE_OPACITY = 70;
+export const MIN_BACKGROUND_IMAGE_OPACITY = 0;
+export const MAX_BACKGROUND_IMAGE_OPACITY = 100;
 
 export interface AppSettings {
   theme: ThemeName | "auto";
@@ -43,6 +47,8 @@ export interface AppSettings {
   workspaceTitleSource: WorkspaceTitleSource;
   autoExpandReasoning: boolean;
   toolCallDetailLevel: ToolCallDetailLevel;
+  backgroundImage: BackgroundImageMetadata | null;
+  backgroundImageOpacity: number;
 }
 
 export interface Settings extends AppSettings {
@@ -66,6 +72,8 @@ export const DEFAULT_CLIENT_SETTINGS: AppSettings = {
   workspaceTitleSource: "title",
   autoExpandReasoning: false,
   toolCallDetailLevel: "detailed",
+  backgroundImage: null,
+  backgroundImageOpacity: DEFAULT_BACKGROUND_IMAGE_OPACITY,
 };
 
 export const DEFAULT_APP_SETTINGS: Settings = {
@@ -103,8 +111,15 @@ export async function saveAppSettings(input: {
     (await loadAppSettingsFromStorage(input.deps));
   const current = normalizeAppSettings(storedCurrent);
   const next = { ...current, ...input.updates };
-  input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
-  await input.deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+  const optimistic = input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
+  try {
+    await input.deps.storage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+  } catch (error) {
+    if (input.queryClient.getQueryData(APP_SETTINGS_QUERY_KEY) === optimistic) {
+      input.queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, current);
+    }
+    throw error;
+  }
 }
 
 export async function loadAppSettingsFromStorage(deps: SettingsDeps): Promise<AppSettings> {
@@ -186,6 +201,21 @@ function parseToolCallDetailLevel(stored: StoredAppSettings): ToolCallDetailLeve
   return null;
 }
 
+function pickBackgroundImageSettings(stored: StoredAppSettings): Partial<AppSettings> {
+  const result: Partial<AppSettings> = {};
+  if (isBackgroundImageMetadata(stored.backgroundImage)) {
+    result.backgroundImage = stored.backgroundImage;
+  }
+  if (stored.backgroundImage === null) {
+    result.backgroundImage = null;
+  }
+  const backgroundImageOpacity = parseBackgroundImageOpacity(stored.backgroundImageOpacity);
+  if (backgroundImageOpacity !== null) {
+    result.backgroundImageOpacity = backgroundImageOpacity;
+  }
+  return result;
+}
+
 function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   const result: Partial<AppSettings> = {};
   if (typeof stored.theme === "string" && VALID_THEMES.has(stored.theme)) {
@@ -246,7 +276,7 @@ function pickAppSettings(stored: StoredAppSettings): Partial<AppSettings> {
   if (toolCallDetailLevel !== null) {
     result.toolCallDetailLevel = toolCallDetailLevel;
   }
-  return result;
+  return { ...result, ...pickBackgroundImageSettings(stored) };
 }
 
 function pickAppSettingsFromLegacy(legacy: Record<string, unknown>): Partial<AppSettings> {
@@ -287,6 +317,13 @@ export function parseClampedFontSize(
     return null;
   }
   return Math.min(bounds.max, Math.max(bounds.min, Math.floor(numericValue)));
+}
+
+export function parseBackgroundImageOpacity(value: unknown): number | null {
+  return parseClampedFontSize(value, {
+    min: MIN_BACKGROUND_IMAGE_OPACITY,
+    max: MAX_BACKGROUND_IMAGE_OPACITY,
+  });
 }
 
 export function sanitizeFontFamily(value: unknown): string | null {

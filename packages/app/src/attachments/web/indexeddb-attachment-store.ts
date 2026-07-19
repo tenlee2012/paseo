@@ -21,6 +21,11 @@ const DB_NAME = "paseo-attachment-bytes";
 const STORE_NAME = "attachments";
 const DB_VERSION = 1;
 
+export interface IndexedDbAttachmentStoreOptions {
+  databaseName?: string;
+  storeName?: string;
+}
+
 function ensureIndexedDb(): IDBFactory {
   const idb = globalThis.indexedDB;
   if (!idb) {
@@ -29,14 +34,17 @@ function ensureIndexedDb(): IDBFactory {
   return idb;
 }
 
-function openAttachmentDb(): Promise<IDBDatabase> {
+function openAttachmentDb(input: {
+  databaseName: string;
+  storeName: string;
+}): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = ensureIndexedDb().open(DB_NAME, DB_VERSION);
+    const request = ensureIndexedDb().open(input.databaseName, DB_VERSION);
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(input.storeName)) {
+        db.createObjectStore(input.storeName, { keyPath: "id" });
       }
     };
 
@@ -53,23 +61,33 @@ function openAttachmentDb(): Promise<IDBDatabase> {
 function runTx<T>(
   db: IDBDatabase,
   mode: IDBTransactionMode,
+  storeName: string,
   run: (store: IDBObjectStore) => IDBRequest<T>,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, mode);
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = db.transaction(storeName, mode);
+    const store = transaction.objectStore(storeName);
     const request = run(store);
+    let result: T;
 
     request.addEventListener("success", () => {
-      resolve(request.result);
+      result = request.result;
     });
 
     request.addEventListener("error", () => {
       reject(request.error ?? new Error("IndexedDB transaction request failed."));
     });
 
+    transaction.addEventListener("complete", () => {
+      resolve(result);
+    });
+
     transaction.addEventListener("error", () => {
       reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+    });
+
+    transaction.addEventListener("abort", () => {
+      reject(transaction.error ?? new Error("IndexedDB transaction aborted."));
     });
   });
 }
@@ -115,17 +133,25 @@ async function sourceToBlob(input: SaveAttachmentInput): Promise<{ blob: Blob; m
   };
 }
 
-async function loadBlob(db: IDBDatabase, id: string): Promise<Blob> {
-  const record = await runTx<StoredBlobRecord | undefined>(db, "readonly", (store) =>
-    store.get(id),
+async function loadBlob(input: { db: IDBDatabase; id: string; storeName: string }): Promise<Blob> {
+  const record = await runTx<StoredBlobRecord | undefined>(
+    input.db,
+    "readonly",
+    input.storeName,
+    (store) => store.get(input.id),
   );
   if (!record?.blob) {
-    throw new Error(`Attachment ${id} was not found in IndexedDB.`);
+    throw new Error(`Attachment ${input.id} was not found in IndexedDB.`);
   }
   return record.blob;
 }
 
-export function createIndexedDbAttachmentStore(): AttachmentStore {
+export function createIndexedDbAttachmentStore(
+  options: IndexedDbAttachmentStoreOptions = {},
+): AttachmentStore {
+  const databaseName = options.databaseName ?? DB_NAME;
+  const storeName = options.storeName ?? STORE_NAME;
+
   return {
     storageType: "web-indexeddb",
 
@@ -134,10 +160,10 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
       const createdAt = Date.now();
       const { blob, mimeType } = await sourceToBlob(input);
       const fileName = input.fileName ?? null;
-      const db = await openAttachmentDb();
+      const db = await openAttachmentDb({ databaseName, storeName });
 
       try {
-        await runTx(db, "readwrite", (store) =>
+        await runTx(db, "readwrite", storeName, (store) =>
           store.put({ id, blob, createdAt, fileName } satisfies StoredBlobRecord),
         );
       } finally {
@@ -156,9 +182,9 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
     },
 
     async encodeBase64({ attachment }): Promise<string> {
-      const db = await openAttachmentDb();
+      const db = await openAttachmentDb({ databaseName, storeName });
       try {
-        const blob = await loadBlob(db, attachment.storageKey);
+        const blob = await loadBlob({ db, id: attachment.storageKey, storeName });
         return await blobToBase64(blob);
       } finally {
         db.close();
@@ -166,9 +192,9 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
     },
 
     async resolvePreviewUrl({ attachment }): Promise<string> {
-      const db = await openAttachmentDb();
+      const db = await openAttachmentDb({ databaseName, storeName });
       try {
-        const blob = await loadBlob(db, attachment.storageKey);
+        const blob = await loadBlob({ db, id: attachment.storageKey, storeName });
         return URL.createObjectURL(blob);
       } finally {
         db.close();
@@ -180,20 +206,20 @@ export function createIndexedDbAttachmentStore(): AttachmentStore {
     },
 
     async delete({ attachment }): Promise<void> {
-      const db = await openAttachmentDb();
+      const db = await openAttachmentDb({ databaseName, storeName });
       try {
-        await runTx(db, "readwrite", (store) => store.delete(attachment.storageKey));
+        await runTx(db, "readwrite", storeName, (store) => store.delete(attachment.storageKey));
       } finally {
         db.close();
       }
     },
 
     async garbageCollect({ referencedIds }): Promise<void> {
-      const db = await openAttachmentDb();
+      const db = await openAttachmentDb({ databaseName, storeName });
       try {
         await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(STORE_NAME, "readwrite");
-          const store = tx.objectStore(STORE_NAME);
+          const tx = db.transaction(storeName, "readwrite");
+          const store = tx.objectStore(storeName);
           const cursorRequest = store.openCursor();
 
           cursorRequest.addEventListener("error", () => {

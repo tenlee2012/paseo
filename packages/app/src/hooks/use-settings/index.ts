@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryClient as appQueryClient } from "@/data/query-client";
 import type { AppLanguage } from "@/i18n/locales";
+import { deleteBackgroundImage } from "@/background-image/store";
 import {
   DEFAULT_DESKTOP_SETTINGS,
   loadDesktopSettings,
@@ -14,19 +15,23 @@ import {
   APP_SETTINGS_KEY,
   APP_SETTINGS_QUERY_KEY,
   DEFAULT_APP_SETTINGS,
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
+  MAX_BACKGROUND_IMAGE_OPACITY,
   MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
   MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_FONT_SIZE,
   loadAppSettingsFromStorage as loadAppSettingsFromStoragePure,
   loadSettingsFromStorage as loadSettingsFromStoragePure,
   normalizeAppSettings,
+  parseBackgroundImageOpacity,
   parseClampedFontSize,
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
@@ -45,17 +50,21 @@ import {
 export {
   APP_SETTINGS_KEY,
   DEFAULT_APP_SETTINGS,
+  DEFAULT_BACKGROUND_IMAGE_OPACITY,
   DEFAULT_CLIENT_SETTINGS,
   DEFAULT_CODE_FONT_SIZE,
   DEFAULT_TERMINAL_SCROLLBACK_LINES,
   DEFAULT_UI_FONT_SIZE,
   MAX_CODE_FONT_SIZE,
+  MAX_BACKGROUND_IMAGE_OPACITY,
   MAX_TERMINAL_SCROLLBACK_LINES,
   MAX_UI_FONT_SIZE,
   MIN_CODE_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
   MIN_TERMINAL_SCROLLBACK_LINES,
   MIN_UI_FONT_SIZE,
   parseClampedFontSize,
+  parseBackgroundImageOpacity,
   parseTerminalScrollbackLines,
   sanitizeFontFamily,
 };
@@ -99,6 +108,56 @@ export interface UseSettingsReturn {
 
 type SettingsSelector<TSelected> = (settings: Settings) => TSelected;
 
+function pickAppSettingsUpdates(updates: Partial<Settings>): Partial<AppSettings> {
+  const appUpdates: Partial<AppSettings> = {};
+  if (updates.theme !== undefined) {
+    appUpdates.theme = updates.theme;
+  }
+  if (updates.language !== undefined) {
+    appUpdates.language = updates.language;
+  }
+  if (updates.sendBehavior !== undefined) {
+    appUpdates.sendBehavior = updates.sendBehavior;
+  }
+  if (updates.serviceUrlBehavior !== undefined) {
+    appUpdates.serviceUrlBehavior = updates.serviceUrlBehavior;
+  }
+  if (updates.terminalScrollbackLines !== undefined) {
+    appUpdates.terminalScrollbackLines = updates.terminalScrollbackLines;
+  }
+  if (updates.uiFontFamily !== undefined) {
+    appUpdates.uiFontFamily = updates.uiFontFamily;
+  }
+  if (updates.monoFontFamily !== undefined) {
+    appUpdates.monoFontFamily = updates.monoFontFamily;
+  }
+  if (updates.uiFontSize !== undefined) {
+    appUpdates.uiFontSize = updates.uiFontSize;
+  }
+  if (updates.codeFontSize !== undefined) {
+    appUpdates.codeFontSize = updates.codeFontSize;
+  }
+  if (updates.syntaxTheme !== undefined) {
+    appUpdates.syntaxTheme = updates.syntaxTheme;
+  }
+  if (updates.workspaceTitleSource !== undefined) {
+    appUpdates.workspaceTitleSource = updates.workspaceTitleSource;
+  }
+  if (updates.autoExpandReasoning !== undefined) {
+    appUpdates.autoExpandReasoning = updates.autoExpandReasoning;
+  }
+  if (updates.toolCallDetailLevel !== undefined) {
+    appUpdates.toolCallDetailLevel = updates.toolCallDetailLevel;
+  }
+  if (updates.backgroundImage !== undefined) {
+    appUpdates.backgroundImage = updates.backgroundImage;
+  }
+  if (updates.backgroundImageOpacity !== undefined) {
+    appUpdates.backgroundImageOpacity = updates.backgroundImageOpacity;
+  }
+  return appUpdates;
+}
+
 export function useAppSettings(): UseAppSettingsReturn {
   const queryClient = useQueryClient();
   const { data, isPending, error } = useQuery({
@@ -122,9 +181,24 @@ export function useAppSettings(): UseAppSettingsReturn {
 
   const resetSettings = useCallback(async () => {
     try {
+      const current =
+        queryClient.getQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY) ??
+        (await loadAppSettingsFromStorage());
       const next = { ...DEFAULT_CLIENT_SETTINGS };
-      queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
-      await AsyncStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+      const optimistic = queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, next);
+      try {
+        await AsyncStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+      } catch (storageError) {
+        if (queryClient.getQueryData(APP_SETTINGS_QUERY_KEY) === optimistic) {
+          queryClient.setQueryData<AppSettings>(APP_SETTINGS_QUERY_KEY, current);
+        }
+        throw storageError;
+      }
+      if (current.backgroundImage) {
+        await deleteBackgroundImage(current.backgroundImage).catch((deleteError) => {
+          console.warn("[AppSettings] Failed to delete reset background image:", deleteError);
+        });
+      }
     } catch (err) {
       console.error("[AppSettings] Failed to reset settings:", err);
       throw err;
@@ -151,46 +225,7 @@ export function useSettings<TSelected>(
 
   const updateSettings = useCallback(
     async (updates: Partial<Settings>) => {
-      const appUpdates: Partial<AppSettings> = {};
-      if (updates.theme !== undefined) {
-        appUpdates.theme = updates.theme;
-      }
-      if (updates.language !== undefined) {
-        appUpdates.language = updates.language;
-      }
-      if (updates.sendBehavior !== undefined) {
-        appUpdates.sendBehavior = updates.sendBehavior;
-      }
-      if (updates.serviceUrlBehavior !== undefined) {
-        appUpdates.serviceUrlBehavior = updates.serviceUrlBehavior;
-      }
-      if (updates.terminalScrollbackLines !== undefined) {
-        appUpdates.terminalScrollbackLines = updates.terminalScrollbackLines;
-      }
-      if (updates.uiFontFamily !== undefined) {
-        appUpdates.uiFontFamily = updates.uiFontFamily;
-      }
-      if (updates.monoFontFamily !== undefined) {
-        appUpdates.monoFontFamily = updates.monoFontFamily;
-      }
-      if (updates.uiFontSize !== undefined) {
-        appUpdates.uiFontSize = updates.uiFontSize;
-      }
-      if (updates.codeFontSize !== undefined) {
-        appUpdates.codeFontSize = updates.codeFontSize;
-      }
-      if (updates.syntaxTheme !== undefined) {
-        appUpdates.syntaxTheme = updates.syntaxTheme;
-      }
-      if (updates.workspaceTitleSource !== undefined) {
-        appUpdates.workspaceTitleSource = updates.workspaceTitleSource;
-      }
-      if (updates.autoExpandReasoning !== undefined) {
-        appUpdates.autoExpandReasoning = updates.autoExpandReasoning;
-      }
-      if (updates.toolCallDetailLevel !== undefined) {
-        appUpdates.toolCallDetailLevel = updates.toolCallDetailLevel;
-      }
+      const appUpdates = pickAppSettingsUpdates(updates);
       const promises: Promise<void>[] = [];
       if (Object.keys(appUpdates).length > 0) {
         promises.push(appSettings.updateSettings(appUpdates));

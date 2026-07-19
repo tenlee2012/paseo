@@ -13,6 +13,13 @@ import {
   writeAttachmentBytes,
 } from "../features/attachments.js";
 import {
+  copyBackgroundImageFile,
+  deleteBackgroundImageFile,
+  garbageCollectBackgroundImages,
+  readBackgroundImageBase64,
+  writeBackgroundImageBase64,
+} from "../features/background-images.js";
+import {
   checkForAppUpdate,
   downloadAndInstallUpdate,
   type AppUpdateCheckIntent,
@@ -579,6 +586,11 @@ export function createDaemonCommandHandlers(): Record<string, DesktopCommandHand
     read_file_base64: (args) => readManagedFileBase64(args ?? {}),
     delete_attachment_file: (args) => deleteManagedAttachmentFile(args ?? {}),
     garbage_collect_attachment_files: (args) => garbageCollectManagedAttachmentFiles(args ?? {}),
+    write_background_image_base64: (args) => writeBackgroundImageBase64(args ?? {}),
+    copy_background_image_file: (args) => copyBackgroundImageFile(args ?? {}),
+    read_background_image_base64: (args) => readBackgroundImageBase64(args ?? {}),
+    delete_background_image_file: (args) => deleteBackgroundImageFile(args ?? {}),
+    garbage_collect_background_images: (args) => garbageCollectBackgroundImages(args ?? {}),
     open_local_daemon_transport: async (args) => {
       const target = args as { transportType: "socket" | "pipe"; transportPath: string };
       return await openLocalTransportSession(target);

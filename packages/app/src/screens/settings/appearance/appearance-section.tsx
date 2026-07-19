@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { Text, TextInput, View, type PressableStateCallbackType } from "react-native";
+import { Alert, Text, TextInput, View, type PressableStateCallbackType } from "react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
+import Slider from "@react-native-community/slider";
 import { ChevronDown, Monitor, Moon, Sun } from "lucide-react-native";
 import {
   SYNTAX_THEME_OPTIONS,
@@ -17,12 +18,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { deleteBackgroundImage, persistBackgroundImage } from "@/background-image/store";
+import { useBackgroundImageRuntimeStore } from "@/background-image/runtime-store";
+import { useImageAttachmentPicker } from "@/hooks/use-image-attachment-picker";
 import { SettingsSection } from "@/screens/settings/settings-section";
+import { confirmDialog } from "@/utils/confirm-dialog";
 import {
+  MAX_BACKGROUND_IMAGE_OPACITY,
   MAX_CODE_FONT_SIZE,
   MAX_UI_FONT_SIZE,
+  MIN_BACKGROUND_IMAGE_OPACITY,
   MIN_CODE_FONT_SIZE,
   MIN_UI_FONT_SIZE,
+  parseBackgroundImageOpacity,
   parseClampedFontSize,
   sanitizeFontFamily,
   useAppSettings,
@@ -49,8 +58,14 @@ const ThemedSun = withUnistyles(Sun);
 const ThemedMoon = withUnistyles(Moon);
 const ThemedMonitor = withUnistyles(Monitor);
 const ThemedChevronDown = withUnistyles(ChevronDown);
+const ThemedSlider = withUnistyles(Slider);
 
 const mutedColorMapping = (theme: Theme) => ({ color: theme.colors.foregroundMuted });
+const sliderColorMapping = (theme: Theme) => ({
+  minimumTrackTintColor: theme.colors.accent,
+  maximumTrackTintColor: theme.colors.surface3,
+  thumbTintColor: theme.colors.accentBright,
+});
 
 function getThemeLabel(t: TFunction, value: AppSettings["theme"]): string {
   const labelKeys: Record<AppSettings["theme"], string> = {
@@ -452,12 +467,107 @@ function SyntaxRow({ value, onChange }: SyntaxRowProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Background image
+// ---------------------------------------------------------------------------
+
+interface BackgroundImageRowProps {
+  hasBackgroundImage: boolean;
+  isSaving: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}
+
+function BackgroundImageRow({
+  hasBackgroundImage,
+  isSaving,
+  onSelect,
+  onRemove,
+}: BackgroundImageRowProps) {
+  const { t } = useTranslation();
+  return (
+    <View style={settingsStyles.row}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.background.image")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.background.recommendation")}
+        </Text>
+      </View>
+      <View style={styles.backgroundActions}>
+        <Button size="sm" variant="outline" loading={isSaving} onPress={onSelect}>
+          {t(
+            hasBackgroundImage
+              ? "settings.appearance.background.change"
+              : "settings.appearance.background.choose",
+          )}
+        </Button>
+        {hasBackgroundImage ? (
+          <Button size="sm" variant="ghost" disabled={isSaving} onPress={onRemove}>
+            {t("settings.appearance.background.remove")}
+          </Button>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+interface BackgroundImageOpacityRowProps {
+  value: number;
+  onValueChange: (value: number) => void;
+  onSlidingComplete: (value: number) => void;
+}
+
+function BackgroundImageOpacityRow({
+  value,
+  onValueChange,
+  onSlidingComplete,
+}: BackgroundImageOpacityRowProps) {
+  const { t } = useTranslation();
+  const accessibilityValue = useMemo(
+    () => ({
+      min: MIN_BACKGROUND_IMAGE_OPACITY,
+      max: MAX_BACKGROUND_IMAGE_OPACITY,
+      now: value,
+      text: `${Math.round(value)}%`,
+    }),
+    [value],
+  );
+  return (
+    <View style={styles.rowWithBorder}>
+      <View style={settingsStyles.rowContent}>
+        <Text style={settingsStyles.rowTitle}>{t("settings.appearance.background.opacity")}</Text>
+        <Text style={settingsStyles.rowHint}>
+          {t("settings.appearance.background.opacityHint")}
+        </Text>
+      </View>
+      <View style={styles.opacityControl}>
+        <ThemedSlider
+          value={value}
+          minimumValue={MIN_BACKGROUND_IMAGE_OPACITY}
+          maximumValue={MAX_BACKGROUND_IMAGE_OPACITY}
+          step={1}
+          onValueChange={onValueChange}
+          onSlidingComplete={onSlidingComplete}
+          tapToSeek
+          style={styles.opacitySlider}
+          testID="background-image-opacity-slider"
+          accessibilityLabel={t("settings.appearance.background.opacityAccessibility")}
+          accessibilityValue={accessibilityValue}
+          uniProps={sliderColorMapping}
+        />
+        <Text style={styles.opacityValue}>{Math.round(value)}%</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export function AppearanceSection() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useAppSettings();
+  const { pickImage } = useImageAttachmentPicker();
   const showFontFamilyRows = !isNative;
   const uiFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_UI_FONT_STACK);
   const monoFontPlaceholder = resolveDefaultStackPlaceholder(t, DEFAULT_MONO_FONT_STACK);
@@ -466,6 +576,13 @@ export function AppearanceSection() {
   const [monoFontDraft, setMonoFontDraft] = useState(settings.monoFontFamily);
   const [uiSizeDraft, setUiSizeDraft] = useState(String(settings.uiFontSize));
   const [codeSizeDraft, setCodeSizeDraft] = useState(String(settings.codeFontSize));
+  const [backgroundImageOpacityPreview, setBackgroundImageOpacityPreview] = useState(
+    settings.backgroundImageOpacity,
+  );
+  const [isSavingBackgroundImage, setIsSavingBackgroundImage] = useState(false);
+  const setRuntimePreviewOpacity = useBackgroundImageRuntimeStore(
+    (state) => state.setPreviewOpacity,
+  );
 
   // Resync numeric drafts when the committed value changes elsewhere.
   useEffect(() => {
@@ -474,6 +591,9 @@ export function AppearanceSection() {
   useEffect(() => {
     setCodeSizeDraft(String(settings.codeFontSize));
   }, [settings.codeFontSize]);
+  useEffect(() => {
+    setBackgroundImageOpacityPreview(settings.backgroundImageOpacity);
+  }, [settings.backgroundImageOpacity]);
 
   const handleThemeChange = useCallback(
     (theme: AppSettings["theme"]) => {
@@ -565,6 +685,106 @@ export function AppearanceSection() {
     }
   }, [codeSizeDraft, settings.codeFontSize, updateSettings]);
 
+  const previewBackgroundImageOpacity = useCallback(
+    (value: number) => {
+      const next = parseBackgroundImageOpacity(value) ?? settings.backgroundImageOpacity;
+      setBackgroundImageOpacityPreview(next);
+      setRuntimePreviewOpacity(next);
+    },
+    [setRuntimePreviewOpacity, settings.backgroundImageOpacity],
+  );
+
+  const commitBackgroundImageOpacity = useCallback(
+    async (value: number) => {
+      const next = parseBackgroundImageOpacity(value) ?? settings.backgroundImageOpacity;
+      setBackgroundImageOpacityPreview(next);
+      try {
+        await updateSettings({ backgroundImageOpacity: next });
+      } catch (error) {
+        setBackgroundImageOpacityPreview(settings.backgroundImageOpacity);
+        console.error("[BackgroundImage] Failed to save background opacity", error);
+        Alert.alert(
+          t("settings.appearance.background.errorTitle"),
+          t("settings.appearance.background.saveFailed"),
+        );
+      } finally {
+        setRuntimePreviewOpacity(null);
+      }
+    },
+    [setRuntimePreviewOpacity, settings.backgroundImageOpacity, t, updateSettings],
+  );
+
+  useEffect(() => {
+    return () => {
+      setRuntimePreviewOpacity(null);
+    };
+  }, [setRuntimePreviewOpacity]);
+
+  const selectBackgroundImage = useCallback(async () => {
+    const picked = await pickImage();
+    if (!picked) {
+      return;
+    }
+
+    setIsSavingBackgroundImage(true);
+    let nextBackgroundImage: AppSettings["backgroundImage"] = null;
+    try {
+      nextBackgroundImage = await persistBackgroundImage(picked);
+      await updateSettings({ backgroundImage: nextBackgroundImage });
+      if (settings.backgroundImage) {
+        await deleteBackgroundImage(settings.backgroundImage).catch((error) => {
+          console.warn("[BackgroundImage] Failed to delete replaced background image", error);
+        });
+      }
+    } catch (error) {
+      if (nextBackgroundImage) {
+        await deleteBackgroundImage(nextBackgroundImage).catch((deleteError) => {
+          console.warn("[BackgroundImage] Failed to delete unsaved background image", deleteError);
+        });
+      }
+      console.error("[BackgroundImage] Failed to save background image", error);
+      Alert.alert(
+        t("settings.appearance.background.errorTitle"),
+        t("settings.appearance.background.saveFailed"),
+      );
+    } finally {
+      setIsSavingBackgroundImage(false);
+    }
+  }, [pickImage, settings.backgroundImage, t, updateSettings]);
+
+  const removeBackgroundImage = useCallback(async () => {
+    if (!settings.backgroundImage) {
+      return;
+    }
+
+    const confirmed = await confirmDialog({
+      title: t("settings.appearance.background.removeTitle"),
+      message: t("settings.appearance.background.removeMessage"),
+      confirmLabel: t("settings.appearance.background.remove"),
+      cancelLabel: t("common.actions.cancel"),
+      destructive: true,
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSavingBackgroundImage(true);
+    try {
+      await updateSettings({ backgroundImage: null });
+      await deleteBackgroundImage(settings.backgroundImage).catch((error) => {
+        console.warn("[BackgroundImage] Failed to delete removed background image", error);
+      });
+    } catch (error) {
+      console.error("[BackgroundImage] Failed to remove background image", error);
+      Alert.alert(
+        t("settings.appearance.background.errorTitle"),
+        t("settings.appearance.background.removeFailed"),
+      );
+    } finally {
+      setIsSavingBackgroundImage(false);
+    }
+  }, [settings.backgroundImage, t, updateSettings]);
+
   // Live-while-typing: the in-progress drafts drive the preview without
   // committing to the global theme. Empty/invalid fields fall back to the
   // theme value inside the preview.
@@ -648,6 +868,23 @@ export function AppearanceSection() {
           <AppearancePreview overrides={previewOverrides} />
         </View>
       </SettingsSection>
+      <SettingsSection title={t("settings.appearance.background.title")}>
+        <View style={settingsStyles.card}>
+          <BackgroundImageRow
+            hasBackgroundImage={settings.backgroundImage !== null}
+            isSaving={isSavingBackgroundImage}
+            onSelect={selectBackgroundImage}
+            onRemove={removeBackgroundImage}
+          />
+          {settings.backgroundImage ? (
+            <BackgroundImageOpacityRow
+              value={backgroundImageOpacityPreview}
+              onValueChange={previewBackgroundImageOpacity}
+              onSlidingComplete={commitBackgroundImageOpacity}
+            />
+          ) : null}
+        </View>
+      </SettingsSection>
     </View>
   );
 }
@@ -708,6 +945,29 @@ const styles = StyleSheet.create((theme) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing[2],
+  },
+  backgroundActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+  },
+  opacityControl: {
+    width: 260,
+    maxWidth: "48%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[3],
+  },
+  opacitySlider: {
+    flex: 1,
+    height: 36,
+  },
+  opacityValue: {
+    width: 44,
+    color: theme.colors.foreground,
+    fontSize: theme.fontSize.sm,
+    textAlign: "right",
+    fontVariant: ["tabular-nums"],
   },
   sizeInput: {
     width: 64,

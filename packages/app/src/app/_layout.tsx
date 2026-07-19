@@ -98,6 +98,12 @@ import {
 } from "@/runtime/host-runtime";
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { applyAppearance } from "@/screens/settings/appearance/apply-appearance";
+import { BackgroundImageLayer } from "@/background-image/background-image-layer";
+import {
+  isBackgroundImageReady,
+  useBackgroundImageRuntimeStore,
+} from "@/background-image/runtime-store";
+import { garbageCollectBackgroundImages } from "@/background-image/store";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
 import { THEME_TO_UNISTYLES, type ThemeName } from "@/styles/theme";
@@ -618,6 +624,13 @@ function MobileGestureWrapper({
 function ProvidersWrapper({ children }: { children: ReactNode }) {
   const { settings, isLoading: settingsLoading } = useAppSettings();
   const { upsertConnectionFromOfferUrl } = useHostMutations();
+  const backgroundImageId = useBackgroundImageRuntimeStore((state) => state.imageId);
+  const backgroundImageLoadStatus = useBackgroundImageRuntimeStore((state) => state.loadStatus);
+  const backgroundImageReady = isBackgroundImageReady({
+    configuredImageId: settings.backgroundImage?.id ?? null,
+    runtimeImageId: backgroundImageId,
+    loadStatus: backgroundImageLoadStatus,
+  });
 
   // Apply theme setting on mount and when it changes
   useEffect(() => {
@@ -641,6 +654,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
       syntaxTheme: settings.syntaxTheme,
+      backgroundImageEnabled: backgroundImageReady,
     });
   }, [
     settingsLoading,
@@ -649,7 +663,15 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
     settings.uiFontSize,
     settings.codeFontSize,
     settings.syntaxTheme,
+    backgroundImageReady,
   ]);
+
+  useEffect(() => {
+    if (settingsLoading) return;
+    void garbageCollectBackgroundImages(settings.backgroundImage).catch((error) => {
+      console.warn("[BackgroundImage] Garbage collection failed", error);
+    });
+  }, [settings.backgroundImage, settingsLoading]);
 
   return (
     <VoiceProvider>
@@ -962,6 +984,7 @@ function RootAppTree() {
   return (
     <GestureHandlerRootView style={flexStyle}>
       <View style={layoutStyles.surfaceFill}>
+        <BackgroundImageLayer />
         <RootProviders>
           <RuntimeProviders>
             <AppShell />

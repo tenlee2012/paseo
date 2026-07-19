@@ -138,17 +138,33 @@ const darkStatusColors = {
 };
 
 // Semantic color tokens - Layer-based system
+const lightDynamicSurfaceColors: {
+  surface0: string;
+  surface1: string;
+  surfaceWorkspace: string;
+  surfaceSidebar: string;
+  surface0Opaque: string;
+  surface1Opaque: string;
+  surfaceWorkspaceOpaque: string;
+  surfaceSidebarOpaque: string;
+} = {
+  surface0: "#ffffff",
+  surface1: "#fafafa",
+  surfaceWorkspace: "#ffffff",
+  surfaceSidebar: "#f4f4f5",
+  surface0Opaque: "#ffffff",
+  surface1Opaque: "#fafafa",
+  surfaceWorkspaceOpaque: "#ffffff",
+  surfaceSidebarOpaque: "#f4f4f5",
+};
+
 const lightSemanticColors = {
   // Surfaces (layers) - shifted one step lighter
-  surface0: "#ffffff", // App background
-  surface1: "#fafafa", // Subtle hover (was zinc-100, now zinc-50)
   surface2: "#f4f4f5", // Elevated: badges, inputs, sheets (was zinc-200, now zinc-100)
   surface3: "#e4e4e7", // Highest elevation (was zinc-300, now zinc-200)
   surface4: "#d4d4d8", // Extra emphasis (was zinc-400, now zinc-300)
   surfaceDiffEmpty: "#f6f6f6", // Empty side of split diff rows, between surface1 and surface2 and biased toward surface2
-  surfaceSidebar: "#f4f4f5", // Sidebar background (darker than main)
   surfaceSidebarHover: "#e9e9ec", // Sidebar hover (darker in light mode)
-  surfaceWorkspace: "#ffffff", // Workspace main background
 
   // Text
   foreground: "#1a1a1e",
@@ -216,6 +232,7 @@ const lightSemanticColors = {
     brightCyan: "#06b6d4",
     brightWhite: "#fafafa",
   },
+  ...lightDynamicSurfaceColors,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -270,6 +287,10 @@ function buildDarkSemanticColors(tint: DarkThemeConfig) {
     surfaceSidebar: tint.surfaceSidebar,
     surfaceSidebarHover: tint.surfaceSidebarHover,
     surfaceWorkspace: tint.surface1,
+    surface0Opaque: tint.surface0,
+    surface1Opaque: tint.surface1,
+    surfaceWorkspaceOpaque: tint.surface1,
+    surfaceSidebarOpaque: tint.surfaceSidebar,
 
     foreground: "#fafafa",
     foregroundMuted: tint.foregroundMuted,

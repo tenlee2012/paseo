@@ -69,17 +69,23 @@ function normalizeDesktopDialogSelection(selection: string | string[] | null): s
 
 export async function openImagePathsWithDesktopDialog(
   dialog: DesktopDialogBridge | null | undefined,
+  input: {
+    multiple?: boolean;
+    title?: string;
+    filterName?: string;
+    extensions?: readonly string[];
+  } = {},
 ): Promise<string[]> {
-  const options = {
+  const dialogOptions = {
     directory: false,
-    multiple: true,
+    multiple: input.multiple ?? true,
     filters: [
       {
-        name: i18n.t("imageAttachmentPicker.dialogFilterName"),
-        extensions: RASTER_IMAGE_FILE_EXTENSIONS,
+        name: input.filterName ?? i18n.t("imageAttachmentPicker.dialogFilterName"),
+        extensions: [...(input.extensions ?? RASTER_IMAGE_FILE_EXTENSIONS)],
       },
     ],
-    title: i18n.t("imageAttachmentPicker.dialogTitle"),
+    title: input.title ?? i18n.t("imageAttachmentPicker.dialogTitle"),
   };
 
   const dialogOpen = dialog?.open;
@@ -87,5 +93,5 @@ export async function openImagePathsWithDesktopDialog(
     throw new Error("Desktop dialog API is not available.");
   }
 
-  return normalizeDesktopDialogSelection(await dialogOpen(options));
+  return normalizeDesktopDialogSelection(await dialogOpen(dialogOptions));
 }
