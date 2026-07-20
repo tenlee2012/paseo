@@ -1791,7 +1791,6 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
   },
   chromeRow: {
     height: WORKSPACE_SECONDARY_HEADER_HEIGHT,

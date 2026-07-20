@@ -44,6 +44,7 @@ import {
   type TerminalRendererReadyChange,
 } from "@/utils/terminal-renderer-readiness";
 import { useAppSettings } from "@/hooks/use-settings";
+import { useIsBackgroundImageVisible } from "@/background-image/use-background-image-visibility";
 import { classifyForResolution, fetchDaemonResolution } from "@/assistant-file-links/resolver";
 import type {
   TerminalLocalFileLinkSource,
@@ -180,7 +181,14 @@ export function TerminalPane({
   const isAppActivelyVisible = useAppActivelyVisible();
   const { theme } = useUnistyles();
   const { settings } = useAppSettings();
-  const xtermTheme = useMemo(() => toXtermTheme(theme.colors.terminal), [theme]);
+  const backgroundImageVisible = useIsBackgroundImageVisible();
+  const xtermTheme = useMemo(
+    () => ({
+      ...toXtermTheme(theme.colors.terminal),
+      ...(backgroundImageVisible ? { background: "transparent" } : {}),
+    }),
+    [backgroundImageVisible, theme],
+  );
   const terminalFontFamily = useMemo(() => {
     const trimmed = settings.monoFontFamily.trim();
     return trimmed.length > 0 ? trimmed : undefined;
@@ -800,7 +808,7 @@ export function TerminalPane({
 
   return (
     <Animated.View style={containerStyle}>
-      <View style={styles.outputContainer}>
+      <View testID="terminal-output-container" style={styles.outputContainer}>
         {isWorkspaceFocused ? (
           <View style={styles.terminalGestureContainer}>
             <TerminalEmulator
@@ -912,13 +920,11 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
   },
   outputContainer: {
     flex: 1,
     minHeight: 0,
     position: "relative",
-    backgroundColor: theme.colors.background,
   },
   terminalGestureContainer: {
     flex: 1,

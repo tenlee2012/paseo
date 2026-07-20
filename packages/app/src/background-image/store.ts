@@ -2,8 +2,8 @@ import type { AttachmentMetadata, AttachmentStore } from "@/attachments/types";
 import { isElectronRuntime } from "@/desktop/host";
 import { isWeb } from "@/constants/platform";
 import {
+  hasUnsupportedBackgroundImagePathExtension,
   isSupportedBackgroundImageMimeType,
-  isSupportedBackgroundImagePath,
 } from "@/background-image/formats";
 
 let backgroundImageStorePromise: Promise<AttachmentStore> | null = null;
@@ -44,7 +44,10 @@ export async function persistBackgroundImage(input: {
   if (!isSupportedBackgroundImageMimeType(mimeType)) {
     throw new Error("Background images must be JPEG or PNG.");
   }
-  if (input.source.kind === "file_uri" && !isSupportedBackgroundImagePath(input.source.uri)) {
+  if (
+    input.source.kind === "file_uri" &&
+    hasUnsupportedBackgroundImagePathExtension(input.source.uri)
+  ) {
     throw new Error("Background images must use a .jpg, .jpeg, or .png extension.");
   }
   const store = await getBackgroundImageStore();

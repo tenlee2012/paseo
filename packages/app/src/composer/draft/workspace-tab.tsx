@@ -710,7 +710,7 @@ export function WorkspaceDraftAgentTab({
   );
 
   return (
-    <FileDropZone style={styles.container}>
+    <FileDropZone testID="draft-conversation-panel" style={styles.container}>
       <View style={styles.contentContainer}>
         {isSubmitting && draftAgent ? (
           <View style={styles.streamContainer}>
@@ -776,7 +776,6 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     width: "100%",
-    backgroundColor: theme.colors.surface0,
   },
   contentContainer: {
     flex: 1,
@@ -797,7 +796,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   inputAreaWrapper: {
     width: "100%",
-    backgroundColor: theme.colors.surface0,
   },
   importPillRow: {
     width: "100%",

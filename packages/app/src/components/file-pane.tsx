@@ -449,7 +449,6 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
   },
   centerState: {
     flex: 1,

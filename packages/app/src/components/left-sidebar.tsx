@@ -772,7 +772,7 @@ function DesktopSidebar({
       pointerEvents={active ? "auto" : "none"}
       style={desktopSidebarStyle}
     >
-      <View style={desktopSidebarBorderStyle}>
+      <View testID="desktop-workspaces-sidebar" style={desktopSidebarBorderStyle}>
         <View style={styles.sidebarDragArea}>
           {ownsTopLeft ? (
             <View style={styles.desktopChromeRow}>

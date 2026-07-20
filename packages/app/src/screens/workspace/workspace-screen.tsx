@@ -3715,9 +3715,13 @@ function WorkspaceScreenContent({
 
       <View style={styles.centerContent}>
         {isMobile ? (
-          <View style={styles.content}>{content}</View>
+          <View testID="workspace-center-content" style={styles.content}>
+            {content}
+          </View>
         ) : (
-          <View style={styles.content}>{desktopContent}</View>
+          <View testID="workspace-center-content" style={styles.content}>
+            {desktopContent}
+          </View>
         )}
       </View>
     </View>
@@ -4066,7 +4070,6 @@ const styles = StyleSheet.create((theme) => ({
   content: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
     position: "relative",
   },
   mobileMountedTabSlot: {
@@ -4075,7 +4078,6 @@ const styles = StyleSheet.create((theme) => ({
   contentPlaceholder: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
   },
   emptyState: {
     flex: 1,

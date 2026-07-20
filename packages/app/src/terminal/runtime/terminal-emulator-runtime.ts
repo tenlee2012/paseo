@@ -230,6 +230,7 @@ export class TerminalEmulatorRuntime {
 
     const terminal = new Terminal({
       allowProposedApi: true,
+      allowTransparency: true,
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",

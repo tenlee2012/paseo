@@ -37,3 +37,9 @@ export function isBackgroundImageReady(input: {
     input.loadStatus === "ready"
   );
 }
+
+export function isBackgroundImageVisible(
+  input: Parameters<typeof isBackgroundImageReady>[0] & { opacity: number },
+): boolean {
+  return input.opacity > 0 && isBackgroundImageReady(input);
+}

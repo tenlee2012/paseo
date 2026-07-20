@@ -141,6 +141,16 @@ A new list+detail feature copies the settings shell. A new workspace-shaped feat
 
 ---
 
+## Background images
+
+The app background image is one fixed, full-window layer mounted at the root. It is not repeated per pane. Global surfaces become translucent only after the configured image has loaded successfully and its effective opacity is greater than zero; loading, failed, removed, and 0% states remain fully opaque.
+
+`surface0`, `surfaceWorkspace`, and `surfaceSidebar` provide the single readability tint over the image. Full-size descendants inside those surfaces — navigation content, workspace panes, conversations, drafts, files, setup, browser roots, and terminal roots — stay transparent instead of stacking another tint. Controls, cards, toolbars, overlays, and embedded website content keep their semantic surface colors.
+
+New full-window or full-pane containers must be checked with a background image enabled on web, Electron, and native. Terminal renderers additionally require xterm transparency and transparent native WebView backing; changing the terminal renderer must preserve both.
+
+---
+
 ## 9. Copy and voice
 
 Sentence case. "Pair a device", "Danger zone", "Restart daemon", "Inject Paseo tools", "No sessions yet", "Load more". Proper nouns retain casing — Paseo, Beta, Stable, Local. Title case is wrong.

@@ -1177,7 +1177,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
 
   return (
     <RewindComposerRestoreProvider text={agentInputDraft.text} setText={agentInputDraft.setText}>
-      <View style={styles.root}>
+      <View testID="agent-conversation-panel" style={styles.root}>
         <FileDropZone style={styles.container} disabled={isArchivingCurrentAgent}>
           {contentContainer}
 
@@ -1595,11 +1595,9 @@ const foregroundColorMapping = (theme: Theme) => ({
 const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.surface0,
   },
   contentContainer: {
     flex: 1,
@@ -1611,7 +1609,6 @@ const styles = StyleSheet.create((theme) => ({
   },
   inputAreaWrapper: {
     width: "100%",
-    backgroundColor: theme.colors.surface0,
   },
   historySyncOverlay: {
     position: "absolute",

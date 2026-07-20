@@ -49,6 +49,8 @@ interface FakeTheme {
     surface1Opaque: string;
     surfaceSidebarOpaque: string;
     surfaceWorkspaceOpaque: string;
+    background: string;
+    terminal: { background: string; foreground: string };
     syntax: Record<string, string>;
   };
 }
@@ -79,6 +81,8 @@ function makeFakeTheme(): FakeTheme {
       surface1Opaque: "#1E2120",
       surfaceSidebarOpaque: "#141716",
       surfaceWorkspaceOpaque: "#1E2120",
+      background: "#181B1A",
+      terminal: { background: "#181B1A", foreground: "#fff" },
       syntax: {},
     },
   };

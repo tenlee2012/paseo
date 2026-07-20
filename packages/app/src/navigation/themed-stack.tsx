@@ -1,26 +1,38 @@
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
+import { ThemeProvider, useTheme } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { type ReactNode, useMemo } from "react";
-import { withUnistyles } from "react-native-unistyles";
 
 interface ThemedStackBaseProps {
-  backgroundColor: string;
   children?: ReactNode;
   screenOptions?: NativeStackNavigationOptions;
 }
 
-function ThemedStackBase({ backgroundColor, children, screenOptions }: ThemedStackBaseProps) {
+function ThemedStackBase({ children, screenOptions }: ThemedStackBaseProps) {
+  const parentTheme = useTheme();
+  const transparentNavigationTheme = useMemo(
+    () => ({
+      ...parentTheme,
+      colors: {
+        ...parentTheme.colors,
+        background: "transparent",
+      },
+    }),
+    [parentTheme],
+  );
   const themedScreenOptions = useMemo<NativeStackNavigationOptions>(
     () => ({
       ...screenOptions,
-      contentStyle: [{ backgroundColor }, screenOptions?.contentStyle],
+      contentStyle: [{ backgroundColor: "transparent" }, screenOptions?.contentStyle],
     }),
-    [backgroundColor, screenOptions],
+    [screenOptions],
   );
 
-  return <Stack screenOptions={themedScreenOptions}>{children}</Stack>;
+  return (
+    <ThemeProvider value={transparentNavigationTheme}>
+      <Stack screenOptions={themedScreenOptions}>{children}</Stack>
+    </ThemeProvider>
+  );
 }
 
-export const ThemedStack = withUnistyles(ThemedStackBase, (theme) => ({
-  backgroundColor: theme.colors.surface0,
-}));
+export const ThemedStack = ThemedStackBase;

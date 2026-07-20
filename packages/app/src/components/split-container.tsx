@@ -1023,7 +1023,7 @@ function SplitPaneView({
 
   return (
     <RenderProfile id={`SplitPaneView:${pane.id}`}>
-      <View ref={paneRef} collapsable={false} style={styles.pane}>
+      <View ref={paneRef} collapsable={false} testID="workspace-split-pane" style={styles.pane}>
         <WindowChromeSafeArea placement="inline" style={styles.paneTabs}>
           <TitlebarDragRegion />
           <WorkspaceDesktopTabsRow
@@ -1149,7 +1149,6 @@ const styles = StyleSheet.create((theme) => ({
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: theme.colors.surface0,
     overflow: "hidden",
   },
   paneTabs: {

@@ -16,6 +16,7 @@ interface FileDropZoneProps {
   disabled?: boolean;
   /** Styles the drop area (defaults to filling its parent). The backdrop fills this area. */
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 /**
@@ -23,7 +24,7 @@ interface FileDropZoneProps {
  * descendant calling `useFileDrop` — the drop area, the backdrop, and the consumer are
  * decoupled, so a consumer's layout can never collapse the backdrop.
  */
-export function FileDropZone({ children, disabled = false, style }: FileDropZoneProps) {
+export function FileDropZone({ children, disabled = false, style, testID }: FileDropZoneProps) {
   const isDragging = useSharedValue(false);
   const suppressed = useSharedValue(false);
   const hasSink = useSharedValue(false);
@@ -60,14 +61,16 @@ export function FileDropZone({ children, disabled = false, style }: FileDropZone
   if (!isWeb) {
     return (
       <FileDropContext.Provider value={ctx}>
-        <View style={targetStyle}>{children}</View>
+        <View style={targetStyle} testID={testID}>
+          {children}
+        </View>
       </FileDropContext.Provider>
     );
   }
 
   return (
     <FileDropContext.Provider value={ctx}>
-      <View ref={containerRef as unknown as RefObject<View>} style={targetStyle}>
+      <View ref={containerRef as unknown as RefObject<View>} style={targetStyle} testID={testID}>
         {children}
         <FileDropBackdrop />
       </View>

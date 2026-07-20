@@ -30,4 +30,24 @@ describe("background image store", () => {
     ).rejects.toThrow("JPEG or PNG");
     expect(store.save).not.toHaveBeenCalled();
   });
+
+  it("accepts native content uris without extensions when the mime type is supported", async () => {
+    const store = createStore();
+    vi.mocked(store.save).mockResolvedValue({
+      id: "background_1",
+      mimeType: "image/png",
+      storageType: "native-file",
+      storageKey: "/background-images/background_1.png",
+      createdAt: 1,
+    });
+    __setBackgroundImageStoreForTests(store);
+
+    await expect(
+      persistBackgroundImage({
+        source: { kind: "file_uri", uri: "content://media/external/images/42" },
+        mimeType: "image/png",
+      }),
+    ).resolves.toMatchObject({ id: "background_1" });
+    expect(store.save).toHaveBeenCalledOnce();
+  });
 });

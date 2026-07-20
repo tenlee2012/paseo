@@ -5,6 +5,11 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { releaseBackgroundImageUrl, resolveBackgroundImageUrl } from "@/background-image/store";
 import { useBackgroundImageRuntimeStore } from "@/background-image/runtime-store";
 
+interface ResolvedBackgroundImage {
+  imageId: string;
+  url: string;
+}
+
 export function BackgroundImageLayer() {
   const { settings } = useAppSettings();
   const backgroundImage = settings.backgroundImage;
@@ -13,8 +18,9 @@ export function BackgroundImageLayer() {
   const markReady = useBackgroundImageRuntimeStore((state) => state.markReady);
   const markError = useBackgroundImageRuntimeStore((state) => state.markError);
   const clearImage = useBackgroundImageRuntimeStore((state) => state.clearImage);
-  const [url, setUrl] = useState<string | null>(null);
-  const source = useMemo(() => ({ uri: url ?? "" }), [url]);
+  const [resolvedImage, setResolvedImage] = useState<ResolvedBackgroundImage | null>(null);
+  const activeResolvedImage = resolvedImage?.imageId === backgroundImage?.id ? resolvedImage : null;
+  const source = useMemo(() => ({ uri: activeResolvedImage?.url ?? "" }), [activeResolvedImage]);
   const opacity = previewOpacity ?? settings.backgroundImageOpacity;
   const imageStyle = useMemo(() => [styles.image, { opacity: opacity / 100 }], [opacity]);
 
@@ -23,12 +29,12 @@ export function BackgroundImageLayer() {
     let resolvedUrl: string | null = null;
 
     if (!backgroundImage) {
-      setUrl(null);
+      setResolvedImage(null);
       clearImage();
       return;
     }
     const backgroundToResolve = backgroundImage;
-    setUrl(null);
+    setResolvedImage(null);
     startLoading(backgroundToResolve.id);
 
     async function resolveImage(): Promise<void> {
@@ -39,11 +45,11 @@ export function BackgroundImageLayer() {
           return;
         }
         resolvedUrl = nextUrl;
-        setUrl(nextUrl);
+        setResolvedImage({ imageId: backgroundToResolve.id, url: nextUrl });
       } catch (error) {
         console.warn("[BackgroundImage] Failed to resolve background image", error);
         if (!disposed) {
-          setUrl(null);
+          setResolvedImage(null);
           markError(backgroundToResolve.id);
         }
       }
@@ -64,15 +70,15 @@ export function BackgroundImageLayer() {
   }, [backgroundImage, clearImage, markError, startLoading]);
 
   const handleLoad = useMemo(
-    () => (backgroundImage ? () => markReady(backgroundImage.id) : undefined),
-    [backgroundImage, markReady],
+    () => (activeResolvedImage ? () => markReady(activeResolvedImage.imageId) : undefined),
+    [activeResolvedImage, markReady],
   );
   const handleError = useMemo(
-    () => (backgroundImage ? () => markError(backgroundImage.id) : undefined),
-    [backgroundImage, markError],
+    () => (activeResolvedImage ? () => markError(activeResolvedImage.imageId) : undefined),
+    [activeResolvedImage, markError],
   );
 
-  if (!backgroundImage || !url) {
+  if (!backgroundImage || !activeResolvedImage) {
     return null;
   }
 

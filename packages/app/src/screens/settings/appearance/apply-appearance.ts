@@ -82,24 +82,21 @@ export function applyAppearance(input: AppearanceInput): void {
       const fontSize = scaleFontSize(input.uiFontSize, input.codeFontSize);
       const lineHeight = { ...t.lineHeight, diff: diffLineHeight };
       if (t.colorScheme === "light") {
+        const backgroundImageEnabled = input.backgroundImageEnabled === true;
         const colors = {
           ...t.colors,
-          surface0:
-            input.backgroundImageEnabled === true
-              ? withAlpha(t.colors.surface0Opaque, 0.45)
-              : t.colors.surface0Opaque,
-          surface1:
-            input.backgroundImageEnabled === true
-              ? withAlpha(t.colors.surface1Opaque, 0.62)
-              : t.colors.surface1Opaque,
-          surfaceWorkspace:
-            input.backgroundImageEnabled === true
-              ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
-              : t.colors.surfaceWorkspaceOpaque,
-          surfaceSidebar:
-            input.backgroundImageEnabled === true
-              ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
-              : t.colors.surfaceSidebarOpaque,
+          surface0: backgroundImageEnabled
+            ? withAlpha(t.colors.surface0Opaque, 0.45)
+            : t.colors.surface0Opaque,
+          surface1: backgroundImageEnabled
+            ? withAlpha(t.colors.surface1Opaque, 0.62)
+            : t.colors.surface1Opaque,
+          surfaceWorkspace: backgroundImageEnabled
+            ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
+            : t.colors.surfaceWorkspaceOpaque,
+          surfaceSidebar: backgroundImageEnabled
+            ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
+            : t.colors.surfaceSidebarOpaque,
           syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
         };
         return {
@@ -110,24 +107,21 @@ export function applyAppearance(input: AppearanceInput): void {
           colors,
         };
       }
+      const backgroundImageEnabled = input.backgroundImageEnabled === true;
       const colors = {
         ...t.colors,
-        surface0:
-          input.backgroundImageEnabled === true
-            ? withAlpha(t.colors.surface0Opaque, 0.45)
-            : t.colors.surface0Opaque,
-        surface1:
-          input.backgroundImageEnabled === true
-            ? withAlpha(t.colors.surface1Opaque, 0.62)
-            : t.colors.surface1Opaque,
-        surfaceWorkspace:
-          input.backgroundImageEnabled === true
-            ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
-            : t.colors.surfaceWorkspaceOpaque,
-        surfaceSidebar:
-          input.backgroundImageEnabled === true
-            ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
-            : t.colors.surfaceSidebarOpaque,
+        surface0: backgroundImageEnabled
+          ? withAlpha(t.colors.surface0Opaque, 0.45)
+          : t.colors.surface0Opaque,
+        surface1: backgroundImageEnabled
+          ? withAlpha(t.colors.surface1Opaque, 0.62)
+          : t.colors.surface1Opaque,
+        surfaceWorkspace: backgroundImageEnabled
+          ? withAlpha(t.colors.surfaceWorkspaceOpaque, 0.45)
+          : t.colors.surfaceWorkspaceOpaque,
+        surfaceSidebar: backgroundImageEnabled
+          ? withAlpha(t.colors.surfaceSidebarOpaque, 0.72)
+          : t.colors.surfaceSidebarOpaque,
         syntax: resolveSyntaxColors(input.syntaxTheme, t.colorScheme),
       };
       return {

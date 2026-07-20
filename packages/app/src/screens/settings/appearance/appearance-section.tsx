@@ -803,6 +803,23 @@ export function AppearanceSection() {
           <ThemeRow value={settings.theme} onChange={handleThemeChange} />
         </View>
       </SettingsSection>
+      <SettingsSection title={t("settings.appearance.background.title")}>
+        <View style={settingsStyles.card}>
+          <BackgroundImageRow
+            hasBackgroundImage={settings.backgroundImage !== null}
+            isSaving={isSavingBackgroundImage}
+            onSelect={selectBackgroundImage}
+            onRemove={removeBackgroundImage}
+          />
+          {settings.backgroundImage ? (
+            <BackgroundImageOpacityRow
+              value={backgroundImageOpacityPreview}
+              onValueChange={previewBackgroundImageOpacity}
+              onSlidingComplete={commitBackgroundImageOpacity}
+            />
+          ) : null}
+        </View>
+      </SettingsSection>
       <SettingsSection title={t("settings.appearance.detailLevel.title")}>
         <View style={settingsStyles.card}>
           <AutoExpandReasoningRow
@@ -866,23 +883,6 @@ export function AppearanceSection() {
         </View>
         <View style={styles.preview}>
           <AppearancePreview overrides={previewOverrides} />
-        </View>
-      </SettingsSection>
-      <SettingsSection title={t("settings.appearance.background.title")}>
-        <View style={settingsStyles.card}>
-          <BackgroundImageRow
-            hasBackgroundImage={settings.backgroundImage !== null}
-            isSaving={isSavingBackgroundImage}
-            onSelect={selectBackgroundImage}
-            onRemove={removeBackgroundImage}
-          />
-          {settings.backgroundImage ? (
-            <BackgroundImageOpacityRow
-              value={backgroundImageOpacityPreview}
-              onValueChange={previewBackgroundImageOpacity}
-              onSlidingComplete={commitBackgroundImageOpacity}
-            />
-          ) : null}
         </View>
       </SettingsSection>
     </View>

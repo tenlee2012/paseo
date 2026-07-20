@@ -99,10 +99,7 @@ import {
 import { getDaemonStartService } from "@/runtime/daemon-start-service";
 import { applyAppearance } from "@/screens/settings/appearance/apply-appearance";
 import { BackgroundImageLayer } from "@/background-image/background-image-layer";
-import {
-  isBackgroundImageReady,
-  useBackgroundImageRuntimeStore,
-} from "@/background-image/runtime-store";
+import { useIsBackgroundImageVisible } from "@/background-image/use-background-image-visibility";
 import { garbageCollectBackgroundImages } from "@/background-image/store";
 import { selectIsAgentListOpen, usePanelStore } from "@/stores/panel-store";
 import { flushDraftPersistStorage } from "@/stores/draft-store";
@@ -419,7 +416,14 @@ function QueryProvider({ children }: { children: ReactNode }) {
 
 const rowStyle = { flex: 1, flexDirection: "row" } as const;
 const flexStyle = { flex: 1 } as const;
+const transparentSurfaceStyle = { backgroundColor: "transparent" } as const;
 const MOBILE_WEB_GESTURE_TOUCH_ACTION = isWeb ? "auto" : "pan-y";
+
+function getAppSurfaceStyle(backgroundImageVisible: boolean) {
+  return backgroundImageVisible
+    ? [layoutStyles.surfaceFill, transparentSurfaceStyle]
+    : layoutStyles.surfaceFill;
+}
 
 interface AppContainerProps {
   children: ReactNode;
@@ -432,6 +436,7 @@ const WINDOW_SIDEBAR_TOGGLE_HORIZONTAL_PADDING = 12;
 function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppContainerProps) {
   const daemons = useHosts();
   const { settings, updateSettings } = useAppSettings();
+  const backgroundImageVisible = useIsBackgroundImageVisible();
   const toggleMobileAgentList = usePanelStore((state) => state.toggleMobileAgentList);
   const toggleDesktopAgentList = usePanelStore((state) => state.toggleDesktopAgentList);
   const openDesktopAgentList = usePanelStore((state) => state.openDesktopAgentList);
@@ -540,7 +545,7 @@ function AppContainer({ children, chromeEnabled: chromeEnabledOverride }: AppCon
   );
 
   const surface = (
-    <View style={layoutStyles.surfaceFill}>
+    <View testID="app-container" style={getAppSurfaceStyle(backgroundImageVisible)}>
       {workspaceChrome}
       {!isCompactLayout && appChromeLayout.sidebarToggleOwner === "window" ? (
         <WindowChromeRegion corners="top-left">
@@ -614,7 +619,7 @@ function MobileGestureWrapper({
 
   return (
     <GestureDetector gesture={openGesture} touchAction={MOBILE_WEB_GESTURE_TOUCH_ACTION}>
-      <View collapsable={false} style={layoutStyles.surfaceFill}>
+      <View collapsable={false} style={flexStyle}>
         {children}
       </View>
     </GestureDetector>
@@ -622,15 +627,10 @@ function MobileGestureWrapper({
 }
 
 function ProvidersWrapper({ children }: { children: ReactNode }) {
-  const { settings, isLoading: settingsLoading } = useAppSettings();
+  const { settings, isLoading: settingsLoading, error: settingsError } = useAppSettings();
   const { upsertConnectionFromOfferUrl } = useHostMutations();
-  const backgroundImageId = useBackgroundImageRuntimeStore((state) => state.imageId);
-  const backgroundImageLoadStatus = useBackgroundImageRuntimeStore((state) => state.loadStatus);
-  const backgroundImageReady = isBackgroundImageReady({
-    configuredImageId: settings.backgroundImage?.id ?? null,
-    runtimeImageId: backgroundImageId,
-    loadStatus: backgroundImageLoadStatus,
-  });
+  const backgroundImageVisible = useIsBackgroundImageVisible();
+  const backgroundImageGarbageCollectedRef = useRef(false);
 
   // Apply theme setting on mount and when it changes
   useEffect(() => {
@@ -654,7 +654,7 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
       uiFontSize: settings.uiFontSize,
       codeFontSize: settings.codeFontSize,
       syntaxTheme: settings.syntaxTheme,
-      backgroundImageEnabled: backgroundImageReady,
+      backgroundImageEnabled: backgroundImageVisible,
     });
   }, [
     settingsLoading,
@@ -663,15 +663,16 @@ function ProvidersWrapper({ children }: { children: ReactNode }) {
     settings.uiFontSize,
     settings.codeFontSize,
     settings.syntaxTheme,
-    backgroundImageReady,
+    backgroundImageVisible,
   ]);
 
   useEffect(() => {
-    if (settingsLoading) return;
+    if (settingsLoading || settingsError || backgroundImageGarbageCollectedRef.current) return;
+    backgroundImageGarbageCollectedRef.current = true;
     void garbageCollectBackgroundImages(settings.backgroundImage).catch((error) => {
       console.warn("[BackgroundImage] Garbage collection failed", error);
     });
-  }, [settings.backgroundImage, settingsLoading]);
+  }, [settings.backgroundImage, settingsError, settingsLoading]);
 
   return (
     <VoiceProvider>
@@ -981,9 +982,11 @@ function RootProviders({ children }: { children: ReactNode }) {
 }
 
 function RootAppTree() {
+  const backgroundImageVisible = useIsBackgroundImageVisible();
+
   return (
     <GestureHandlerRootView style={flexStyle}>
-      <View style={layoutStyles.surfaceFill}>
+      <View testID="app-root-surface" style={getAppSurfaceStyle(backgroundImageVisible)}>
         <BackgroundImageLayer />
         <RootProviders>
           <RuntimeProviders>
